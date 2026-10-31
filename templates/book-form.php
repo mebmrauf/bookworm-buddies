@@ -16,6 +16,13 @@
         <label for="year_published">Published year</label>
         <input id="year_published" type="number" inputmode="numeric" name="year_published" min="1" max="<?= date('Y') ?>" value="<?= e($values['year_published']) ?>" required>
     </div>
+    <fieldset class="choices">
+        <legend>How can people get this book?</legend>
+        <?php foreach (HANDOVERS as $value => $label): ?>
+            <label class="check"><input type="radio" name="handover" value="<?= $value ?>"<?= ($values['handover'] ?? 'meet') === $value ? ' checked' : '' ?>> <?= e($label) ?></label>
+        <?php endforeach; ?>
+        <p class="help">Meeting in person is simplest and free. With courier, the person receiving the book pays.</p>
+    </fieldset>
     <?php if (cloudinary_enabled()): ?>
         <div class="field">
             <label for="cover">Cover photo <span class="optional">(optional)</span></label>
@@ -27,6 +34,9 @@
             <input id="cover" type="file" name="cover" accept="image/jpeg,image/png,image/webp" data-image-input="cover" aria-describedby="cover-help">
             <p class="help" id="cover-help">JPG, PNG or WebP, up to 5 MB.</p>
         </div>
+    <?php endif; ?>
+    <?php if (isset($shareOption)): ?>
+        <label class="check"><input type="checkbox" name="share" value="1"<?= $shareOption ? ' checked' : '' ?>> Share now, so others can find and request it</label>
     <?php endif; ?>
     <div class="form__actions">
         <button type="submit" class="btn btn--primary"><?= e($submitLabel) ?></button>

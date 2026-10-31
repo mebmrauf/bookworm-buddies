@@ -17,9 +17,18 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/cloudinary.php';
+require_once __DIR__ . '/mail.php';
 require_once __DIR__ . '/view.php';
 
 const DUPLICATE_KEY = 1062;
+
+// 0 means a guest. Public pages use this; private ones go through auth.php.
+$userID = (int) ($_SESSION['user_id'] ?? 0);
+
+// Only same-site paths, so a crafted link can't send people to another site after sign-in.
+function safe_next($path) {
+    return is_string($path) && preg_match('#^/(?![/\\\\])#', $path) && !str_contains($path, 'actions/') ? $path : '/home.php';
+}
 
 // Crafted requests can send arrays where a string is expected.
 function post($key, $trim = true) {

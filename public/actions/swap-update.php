@@ -25,4 +25,18 @@ if ($action === 'cancel') {
 if ($changed === 0) {
     flash('You cannot do that for this request.', '/requests.php');
 }
+
+if ($action === 'accept' || $action === 'decline') {
+    $swap = run("
+        SELECT b.title, r.email, r.first_name
+        FROM swap s JOIN books b ON s.bookID = b.bookID JOIN users r ON s.requesterID = r.userID
+        WHERE s.swapID = ?
+    ", 'i', $swapID)->get_result()->fetch_assoc();
+    if ($action === 'accept') {
+        notify($swap['email'], $swap['first_name'], "Accepted: {$swap['title']}", "Good news! Your request for {$swap['title']} was accepted. Open your requests to see how to contact the owner.");
+    } else {
+        notify($swap['email'], $swap['first_name'], "Update on {$swap['title']}", "Your request for {$swap['title']} was declined this time. There are plenty of other books to explore.");
+    }
+}
+
 flash('Request updated.', '/requests.php', 'success');

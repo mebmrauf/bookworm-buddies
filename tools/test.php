@@ -37,8 +37,8 @@ function cleanup() {
     $avatars = db("SELECT avatar_public_id FROM users WHERE username LIKE CONCAT(?, '%')", 's', $tag)->fetch_all();
     delete_images(array_merge(array_column($covers, 0), array_column($avatars, 0)));
     db("DELETE b FROM books b JOIN collection c ON b.bookID = c.bookID JOIN users u ON c.userID = u.userID WHERE u.username LIKE CONCAT(?, '%')", 's', $tag);
-    db("DELETE FROM users WHERE username LIKE CONCAT(?, '%')", 's', $tag);
-    db("DELETE FROM login_attempts WHERE username LIKE CONCAT(?, '%')", 's', $tag);
+    db("DELETE FROM users WHERE username LIKE CONCAT(?, '%') OR email LIKE CONCAT('delivered+', ?, '%')", 'ss', $tag, $tag);
+    db("DELETE FROM login_attempts WHERE username LIKE CONCAT(?, '%') OR username LIKE CONCAT('delivered+', ?, '%')", 'ss', $tag, $tag);
 }
 register_shutdown_function('cleanup');
 
@@ -95,17 +95,34 @@ class Browser {
     }
 }
 
-function signup($browser, $suffix, $overrides = []) {
+// Resend's test address makes a real API call without reaching anyone. Used only where sending is being tested, to save quota.
+$realEmail = true;
+function test_email($suffix) {
+    global $tag, $realEmail;
+    return $realEmail ? "delivered+$tag$suffix@resend.dev" : "$tag$suffix@example.com";
+}
+
+function signup($browser, $suffix, $overrides = [], $activate = true) {
     global $tag;
-    return $browser->post('signup.php', $overrides + [
-        'fname' => 'Test', 'lname' => 'User', 'dob' => '2000-01-15',
-        'email' => "$tag$suffix@example.com", 'username' => "$tag$suffix", 'password' => 'correct-horse-1',
-    ], 'signup.php');
+    $email = $overrides['email'] ?? test_email($suffix);
+    $html = $browser->post('signup.php', $overrides + ['name' => 'Test User', 'email' => $email, 'password' => 'correct-horse-1'], 'signup.php');
+    if ($activate) {
+        db("UPDATE users SET username = ?, email_verified_at = NOW() WHERE email = ?", 'ss', "$tag$suffix", $email);
+    }
+    usleep(600000); // Resend allows only a few requests per second.
+    return $html;
 }
 
 function signin($browser, $suffix, $password = 'correct-horse-1') {
     global $tag;
-    return $browser->post('actions/signin.php', ['username' => "$tag$suffix", 'password' => $password], 'index.php');
+    return $browser->post('actions/signin.php', ['login' => "$tag$suffix", 'password' => $password], 'signin.php');
+}
+
+// Gives an account a link we know, since only its hash is ever stored.
+function plant_token($userID, $hours = 1) {
+    $token = bin2hex(random_bytes(32));
+    db("UPDATE users SET verify_token_hash = ?, verify_expires_at = NOW() + INTERVAL ? HOUR WHERE userID = ?", 'sii', hash('sha256', $token), $hours, $userID);
+    return $token;
 }
 
 function user_id($suffix) {
@@ -142,45 +159,115 @@ foreach (['config.php', 'ca.pem', 'demo-accounts.txt', 'database/schema.sql', 's
     check("web: $file is not served", !preg_match('/<\?php|BEGIN CERTIFICATE|CREATE TABLE|username  password/', $body));
 }
 
-// ---- Logged out
-foreach (['home.php', 'home.php?available=1', 'requests.php', 'add-book.php', 'profile.php', 'settings.php', 'search.php?q=a', 'edit-book.php?id=1'] as $page) {
+// ---- Guests can look around
+$html = $anon->get('');
+check('guest: landing page loads', $anon->code === 200 && str_contains($html, 'How it works') && str_contains($html, 'Join free'));
+check('guest: landing page shows books', str_contains($html, 'book-card__title'));
+$html = $anon->get('home.php');
+check('guest: browse page is public', $anon->code === 200 && str_ends_with($anon->url, 'home.php') && str_contains($html, 'book-card__title'));
+check('guest: requesting needs no form until signed in', !str_contains($html, 'actions/swap-request.php') && !str_contains($html, 'name="csrf"'));
+check('guest: the city filter is offered', str_contains($html, 'name="city"') && str_contains($html, 'All cities'));
+$anon->get('home.php?available=1');
+check('guest: available filter is public', $anon->code === 200 && str_ends_with($anon->url, 'available=1'));
+$publicBook = db("SELECT c.bookID, c.userID, u.email FROM collection c JOIN users u ON c.userID = u.userID LEFT JOIN swap s ON s.activeBookID = c.bookID WHERE c.showcase = 1 AND s.swapID IS NULL LIMIT 1")->fetch_assoc();
+if ($publicBook) {
+    $html = $anon->get("book.php?id={$publicBook['bookID']}");
+    check('guest: book page is public', $anon->code === 200 && str_contains($html, 'Sign in to request') && str_contains($html, 'to leave feedback'));
+    check('guest: is not treated as having requested the book', !str_contains($html, 'You requested this book'));
+    $html = $anon->get("profile.php?userID={$publicBook['userID']}");
+    check('guest: public profile shows no email', $anon->code === 200 && !str_contains($html, $publicBook['email']));
+}
+$html = $anon->get('search.php?q=' . urlencode('the'));
+check('guest: can search books', $anon->code === 200 && str_ends_with(strtok($anon->url, '?'), 'search.php') && !str_contains($html, '<h2>People</h2>'));
+foreach (['requests.php', 'add-book.php', 'profile.php', 'settings.php', 'edit-book.php?id=1'] as $page) {
     $anon->get($page);
-    check("logged out: $page redirects to sign in", str_ends_with($anon->url, 'index.php'));
+    check("guest: $page redirects to sign in", str_ends_with($anon->url, 'signin.php'));
 }
 foreach (['actions/book-delete.php', 'actions/account-delete.php', 'actions/swap-update.php', 'actions/swap-request.php', 'actions/feedback-add.php', 'actions/feedback-reply.php', 'actions/feedback-delete.php', 'actions/book-showcase.php'] as $page) {
     $anon->rawPost($page, ['bookID' => 1]);
-    check("logged out: POST $page redirects to sign in", str_ends_with($anon->url, 'index.php'));
+    check("guest: POST $page redirects to sign in", str_ends_with($anon->url, 'signin.php'));
+}
+foreach (['//evil.example', '/\\evil.example', 'https://evil.example', '/actions/logout.php'] as $bad) {
+    check("signin: refuses next=$bad", str_contains($anon->get('signin.php?next=' . urlencode($bad)), 'name="next" value="/home.php"'));
 }
 
-// ---- Signup and sign in
+// ---- Signup
 $alice = new Browser();
 $bob = new Browser();
 $carol = new Browser();
 
-check('signup: rejects a short password', str_contains(signup($alice, 'a', ['password' => 'short']), 'Password must be'));
-check('signup: rejects a bad email', str_contains(signup($alice, 'a', ['email' => 'nope']), 'valid email'));
-check('signup: rejects a future birth date', str_contains(signup($alice, 'a', ['dob' => '2999-01-01']), 'date of birth'));
-check('signup: rejects a bad username', str_contains(signup($alice, 'a', ['username' => "a' OR 1=1 --"]), 'Username must be'));
-check('signup: wrong CSRF token refused', !user_id('x') && str_contains($alice->rawPost('signup.php', ['csrf' => 'bad', 'fname' => 'T', 'lname' => 'U', 'dob' => '2000-01-01', 'email' => "{$tag}x@example.com", 'username' => "{$tag}x", 'password' => 'correct-horse-1']), 'expired') && !user_id('x'));
+$signupForm = $alice->get('signup.php');
+check('signup: asks only name, email and password', str_contains($signupForm, 'name="name"') && str_contains($signupForm, 'name="email"') && str_contains($signupForm, 'name="password"') && !str_contains($signupForm, 'name="username"') && !str_contains($signupForm, 'name="dob"'));
+check('signup: rejects a short password', str_contains(signup($alice, 'a', ['password' => 'short'], false), 'Password must be'));
+check('signup: rejects a bad email', str_contains(signup($alice, 'a', ['email' => 'nope'], false), 'valid email'));
+check('signup: rejects a blank name', str_contains(signup($alice, 'a', ['name' => '  '], false), 'enter your name'));
+check('signup: wrong CSRF token refused', str_contains($alice->rawPost('signup.php', ['csrf' => 'bad', 'name' => 'T U', 'email' => test_email('x'), 'password' => 'correct-horse-1']), 'expired') && !db("SELECT 1 FROM users WHERE email = ?", 's', test_email('x'))->num_rows);
 
-$html = signup($alice, 'a', ['lname' => "O'Brien"]);
-check('signup: apostrophe in a name works', str_contains($html, 'Registration successful'));
-check('signup: name stored literally', db("SELECT last_name FROM users WHERE userID = ?", 'i', user_id('a'))->fetch_row()[0] === "O'Brien");
-$hash = db("SELECT password FROM users WHERE userID = ?", 'i', user_id('a'))->fetch_row()[0];
+$html = signup($alice, 'a', ['name' => "Test O'Brien"], false);
+$row = db("SELECT userID, username, first_name, last_name, password, email_verified_at, verify_sent_at, verify_token_hash, date_of_birth FROM users WHERE email = ?", 's', test_email('a'))->fetch_assoc();
+check('signup: goes to the check-your-email page', str_ends_with($alice->url, 'verify-email.php') && str_contains($html, 'Check your email'));
+check('signup: splits the name, apostrophe included', $row['first_name'] === 'Test' && $row['last_name'] === "O'Brien");
+check('signup: a username is generated', (bool) preg_match('/^test\.o\.brien[0-9]*$/', $row['username']));
+check('signup: birth date is left empty', $row['date_of_birth'] === null);
+check('signup: Resend accepted the email over HTTPS', $row['verify_sent_at'] !== null);
+check('signup: the link is stored only as a hash', strlen((string) $row['verify_token_hash']) === 64);
+$hash = $row['password'];
 check('password stored as a hash', password_verify('correct-horse-1', $hash) && !str_contains($hash, 'correct-horse'));
-check('signup: duplicate username refused', str_contains(signup($alice, 'a', ['email' => "{$tag}other@example.com"]), 'already used'));
-check('signup: duplicate email refused', str_contains(signup($alice, 'z', ['email' => "{$tag}a@example.com"]), 'already used'));
-check('signup: injection text is only text', str_contains(signup($alice, 'q', ['fname' => "x'); DROP TABLE users; --"]), 'Registration successful') && db("SELECT COUNT(*) FROM users")->fetch_row()[0] > 0);
+
+signup($alice, 'dupe', ['name' => 'Test Duplicate', 'email' => test_email('a')], false);
+check('signup: a used email makes no second account', db("SELECT COUNT(*) FROM users WHERE email = ?", 's', test_email('a'))->fetch_row()[0] == 1);
+check('signup: a used email looks the same as a new one', str_ends_with($alice->url, 'verify-email.php'));
+check('signup: a used email does not change the password', db("SELECT password FROM users WHERE userID = ?", 'i', $row['userID'])->fetch_row()[0] === $hash);
+signup($alice, 'twin', ['name' => "Test O'Brien"], false);
+$twin = db("SELECT username FROM users WHERE email = ?", 's', test_email('twin'))->fetch_row()[0] ?? '';
+check('signup: the same name gets a different username', $twin !== '' && $twin !== $row['username']);
+
+// ---- Email verification
+$pending = new Browser();
+$login = fn($browser, $password = 'correct-horse-1') => $browser->post('actions/signin.php', ['login' => test_email('a'), 'password' => $password], 'signin.php');
+$login($pending);
+check('verify: an unconfirmed account cannot sign in', str_ends_with($pending->url, 'verify-email.php'));
+$pending->get('profile.php');
+check('verify: and has no session', str_ends_with($pending->url, 'signin.php'));
+$token = plant_token($row['userID']);
+$html = $pending->get("verify.php?token=$token");
+check('verify: opening the link alone confirms nothing', str_contains($html, 'Confirm my email') && db("SELECT email_verified_at FROM users WHERE userID = ?", 'i', $row['userID'])->fetch_row()[0] === null);
+check('verify: a wrong link is refused', str_contains($pending->get('verify.php?token=' . str_repeat('a', 64)), "doesn't work"));
+$html = $pending->post('verify.php', ['token' => $token], "verify.php?token=$token");
+check('verify: pressing the button confirms', db("SELECT email_verified_at FROM users WHERE userID = ?", 'i', $row['userID'])->fetch_row()[0] !== null && str_contains($html, 'confirmed'));
+check('verify: a link only works once', str_contains($pending->get("verify.php?token=$token"), "doesn't work"));
+$login($pending);
+check('verify: can sign in with email afterwards', str_ends_with($pending->url, 'home.php'));
+db("UPDATE users SET username = ? WHERE userID = ?", 'si', "{$tag}a", $row['userID']);
+
+$expired = plant_token(db("SELECT userID FROM users WHERE email = ?", 's', test_email('twin'))->fetch_row()[0], -1);
+check('verify: an expired link is refused', str_contains($anon->get("verify.php?token=$expired"), "doesn't work"));
+signup($alice, 'twin', ['name' => 'New Owner'], false);
+check('signup: an expired unconfirmed account frees its email', db("SELECT first_name FROM users WHERE email = ?", 's', test_email('twin'))->fetch_row()[0] === 'New');
+$sentBefore = db("SELECT verify_sent_at FROM users WHERE email = ?", 's', test_email('twin'))->fetch_row()[0];
+$anon->post('verify-email.php', ['email' => test_email('twin')], 'verify-email.php');
+check('verify: resending is limited to once a minute', db("SELECT verify_sent_at FROM users WHERE email = ?", 's', test_email('twin'))->fetch_row()[0] === $sentBefore);
+check('verify: the resend answer reveals nothing', str_contains($anon->post('verify-email.php', ['email' => 'nobody-here@example.com'], 'verify-email.php'), 'If that email needs confirming'));
+db("DELETE FROM users WHERE email = ?", 's', test_email('twin'));
+
+// ---- Sign in
+db("UPDATE users SET email = ? WHERE email = ?", 'ss', "{$tag}a@example.com", test_email('a'));
+$realEmail = false;
+$alice = new Browser();
 signup($bob, 'b');
 signup($carol, 'c');
+signup(new Browser(), 'q');
 
-check('signin: wrong password refused', str_contains(signin($alice, 'a', 'wrong-password'), 'Invalid username'));
+check('signin: wrong password refused', str_contains(signin($alice, 'a', 'wrong-password'), 'Invalid email'));
 signin($alice, 'a');
-check('signin: correct password works', str_ends_with($alice->url, 'home.php'));
+check('signin: correct password with username works', str_ends_with($alice->url, 'home.php'));
 signin($bob, 'b');
 signin($carol, 'c');
 $alice->get('index.php');
-check('signin: signed-in user skips the form', str_ends_with($alice->url, 'home.php'));
+check('signin: signed-in user skips the landing page', str_ends_with($alice->url, 'home.php'));
+$redirected = new Browser();
+$redirected->post('actions/signin.php', ['login' => "{$tag}b", 'password' => 'correct-horse-1', 'next' => '/requests.php'], 'signin.php');
+check('signin: returns to the page they wanted', str_ends_with($redirected->url, 'requests.php'));
 
 $limited = new Browser();
 for ($i = 0; $i < 5; $i++) {
@@ -188,18 +275,52 @@ for ($i = 0; $i < 5; $i++) {
 }
 check('signin: blocked after 5 failures', str_contains(signin($limited, 'q'), 'Too many failed attempts') && !str_ends_with($limited->url, 'home.php'));
 
+// ---- Username and optional details
+$settings = fn($overrides = []) => $overrides + ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}a", 'date_of_birth' => '', 'gender' => '', 'mobile' => '', 'address' => '', 'new_password' => ''];
+check('username: a taken name is refused', str_contains($alice->post('settings.php', $settings(['username' => "{$tag}b"]), 'settings.php'), 'already taken'));
+check('username: uniqueness ignores capitals', str_contains($alice->post('settings.php', $settings(['username' => strtoupper("{$tag}b")]), 'settings.php'), 'already taken'));
+check('username: bad characters are refused', str_contains($alice->post('settings.php', $settings(['username' => "a b'c"]), 'settings.php'), 'Username must be'));
+$alice->post('settings.php', $settings(['username' => "{$tag}renamed"]), 'settings.php');
+check('username: can be changed', db("SELECT username FROM users WHERE email = ?", 's', test_email('a'))->fetch_row()[0] === "{$tag}renamed");
+$alice->post('settings.php', $settings(), 'settings.php');
+$alice->post('settings.php', $settings(['date_of_birth' => '2000-01-15', 'gender' => 'Female', 'mobile' => '+880 1712-345678', 'address' => 'Dhaka']), 'settings.php');
+$details = db("SELECT date_of_birth, gender, mobile, address FROM users WHERE email = ?", 's', test_email('a'))->fetch_assoc();
+check('details: optional fields save', $details === ['date_of_birth' => '2000-01-15', 'gender' => 'Female', 'mobile' => '+880 1712-345678', 'address' => 'Dhaka']);
+foreach ([['date_of_birth' => '2999-01-01', 'date of birth'], ['gender' => 'Dragon', 'gender'], ['mobile' => 'call me', 'mobile number'], ['address' => str_repeat('x', 256), 'Address can be']] as $bad) {
+    $needle = $bad[0];
+    unset($bad[0]);
+    check("details: refuses a bad value ($needle)", str_contains($alice->post('settings.php', $settings($bad), 'settings.php'), $needle));
+}
+$alice->post('settings.php', $settings(['date_of_birth' => '2000-01-15']), 'settings.php');
+check('details: blank fields clear them', db("SELECT gender FROM users WHERE email = ?", 's', test_email('a'))->fetch_row()[0] === null);
+$ownProfile = $alice->get('profile.php');
+check('details: the owner sees them', str_contains($ownProfile, '2000-01-15'));
+
+// ---- Changing email
+$newEmail = test_email('a2');
+$alice->post('settings.php', $settings(['email' => $newEmail, 'date_of_birth' => '2000-01-15']), 'settings.php');
+usleep(600000);
+$emailRow = db("SELECT userID, email, pending_email FROM users WHERE username = ?", 's', "{$tag}a")->fetch_assoc();
+check('email: stays the same until confirmed', $emailRow['email'] === test_email('a') && $emailRow['pending_email'] === $newEmail);
+check('email: a taken address is refused', str_contains($alice->post('settings.php', $settings(['email' => test_email('b')]), 'settings.php'), 'already used'));
+$token = plant_token($emailRow['userID']);
+$alice->post('verify.php', ['token' => $token], "verify.php?token=$token");
+$emailRow = db("SELECT email, pending_email FROM users WHERE username = ?", 's', "{$tag}a")->fetch_assoc();
+check('email: changes after confirming', $emailRow['email'] === $newEmail && $emailRow['pending_email'] === null);
+db("UPDATE users SET email = ? WHERE username = ?", 'ss', test_email('a'), "{$tag}a");
+
 // ---- Finding 1: account takeover
 $aliceID = user_id('a');
 $bobID = user_id('b');
 $carolID = user_id('c');
 $bobBefore = db("SELECT email, password FROM users WHERE userID = ?", 'i', $bobID)->fetch_assoc();
-$alice->post("settings.php?userID=$bobID", ['first_name' => 'Hacked', 'last_name' => 'Hacked', 'email' => "{$tag}a@example.com", 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a", 'new_password' => ''], 'settings.php');
+$alice->post("settings.php?userID=$bobID", ['first_name' => 'Hacked', 'last_name' => 'Hacked', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a", 'new_password' => ''], 'settings.php');
 check('profile: ?userID= cannot change another account', db("SELECT email, password FROM users WHERE userID = ?", 'i', $bobID)->fetch_assoc() === $bobBefore);
 check('profile: blank password keeps the old one', db("SELECT password FROM users WHERE userID = ?", 'i', $aliceID)->fetch_row()[0] === $hash);
 check('profile: the form never shows the password hash', !str_contains($alice->get('settings.php'), $hash));
-check('profile: duplicate username refused', str_contains($alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => "{$tag}a@example.com", 'date_of_birth' => '2000-01-15', 'username' => "{$tag}b", 'new_password' => ''], 'settings.php'), 'already used'));
-check('profile: changing password needs the current one', str_contains($alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => "{$tag}a@example.com", 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a", 'new_password' => 'brand-new-pass-1', 'current_password' => 'wrong'], 'settings.php'), 'current password is incorrect'));
-$alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => "{$tag}a@example.com", 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a", 'new_password' => 'brand-new-pass-1', 'current_password' => 'correct-horse-1'], 'settings.php');
+check('profile: duplicate username refused', str_contains($alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}b", 'new_password' => ''], 'settings.php'), 'already taken'));
+check('profile: changing password needs the current one', str_contains($alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a", 'new_password' => 'brand-new-pass-1', 'current_password' => 'wrong'], 'settings.php'), 'current password is incorrect'));
+$alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a", 'new_password' => 'brand-new-pass-1', 'current_password' => 'correct-horse-1'], 'settings.php');
 check('profile: password change works', password_verify('brand-new-pass-1', db("SELECT password FROM users WHERE userID = ?", 'i', $aliceID)->fetch_row()[0]));
 
 // ---- Books
@@ -231,7 +352,7 @@ check('book: owner can delete it', db("SELECT 1 FROM books WHERE bookID = ?", 'i
 
 // ---- Finding 16: privacy
 $visit = $bob->get("profile.php?userID=$aliceID");
-check('privacy: visitor does not see email', !str_contains($visit, "{$tag}a@example.com"));
+check('privacy: visitor does not see email', !str_contains($visit, test_email('a')));
 check('privacy: visitor does not see birth date', !str_contains($visit, '2000-01-15'));
 check('privacy: visitor sees showcased books', str_contains($visit, "$tag shown"));
 check('privacy: visitor does not see other books', !str_contains($visit, "$tag hidden"));
@@ -253,19 +374,35 @@ $alice->post('actions/swap-request.php', ['bookID' => $shown]);
 check('swap: cannot request your own book', latest_swap($shown) === null);
 $bob->post('actions/swap-request.php', ['bookID' => $hidden]);
 check('swap: cannot request a non-showcased book', latest_swap($hidden) === null);
-check('swap: book offered on Available Books', str_contains($bob->get('home.php?available=1'), "$tag shown"));
+check('swap: book offered on Available Books', str_contains($bob->get('home.php?available=1&city=all'), "$tag shown"));
 
+db("UPDATE users SET mobile = '+8801700000001', address = 'Owner Lane 1' WHERE userID = ?", 'i', $aliceID);
+db("UPDATE users SET mobile = '+8801700000002', address = 'Requester Road 2' WHERE userID = ?", 'i', $bobID);
+$hasContact = fn($html, $mobile, $address, $email) => str_contains($html, $mobile) || str_contains($html, $address) || str_contains($html, $email);
+$bob->post('settings.php', ['first_name' => 'Test', 'last_name' => 'User', 'email' => test_email('b'), 'username' => "{$tag}b", 'mobile' => '+8801700000002', 'address' => 'Requester Road 2', 'city' => 'Chittagong', 'area' => 'Agrabad']);
+check('location: saves a city and area', db("SELECT city, area FROM users WHERE userID = ?", 'i', $bobID)->fetch_assoc() === ['city' => 'Chittagong', 'area' => 'Agrabad']);
+check('location: refuses a made-up city', str_contains($bob->post('settings.php', ['first_name' => 'Test', 'last_name' => 'User', 'email' => test_email('b'), 'username' => "{$tag}b", 'city' => 'Atlantis']), 'city from the list'));
+$bob->post('settings.php', ['first_name' => 'Test', 'last_name' => 'User', 'email' => test_email('b'), 'username' => "{$tag}b", 'mobile' => '+8801700000002', 'address' => 'Requester Road 2', 'city' => 'Chittagong', 'area' => 'Agrabad']);
+db("UPDATE users SET city = 'Dhaka', area = 'Dhanmondi' WHERE userID = ?", 'i', $aliceID);
+check('location: the book card shows the owner\'s area', str_contains($bob->get('home.php?city=all'), 'Dhanmondi, Dhaka'));
+check('location: the city filter narrows results', str_contains($bob->get('home.php?city=Dhaka'), "$tag shown") && !str_contains($bob->get('home.php?city=Sylhet'), "$tag shown"));
+check('location: an unknown city filter shows all', str_contains($bob->get('home.php?city=' . urlencode("x' OR 1=1")), 'across all cities'));
+check('location: a visitor sees the area on the profile', str_contains($carol->get("profile.php?userID=$aliceID"), 'Dhanmondi, Dhaka'));
+check('location: a person without a city is prompted', str_contains($carol->get('home.php'), 'Add your city'));
+db("UPDATE users SET mobile = '+8801700000001', address = 'Owner Lane 1' WHERE userID = ?", 'i', $aliceID);
 $bob->post('actions/swap-request.php', ['bookID' => $shown]);
 $swap = latest_swap($shown);
+check('contact: requester sees no owner details while pending', !$hasContact($bob->get('requests.php'), '+8801700000001', 'Owner Lane 1', test_email('a')));
+check('contact: owner sees no requester details while pending', !$hasContact($alice->get('requests.php'), '+8801700000002', 'Requester Road 2', test_email('b')));
 check('swap: request created as pending', swap_status($swap) === 'pending');
 check('swap: goes to the right owner', db("SELECT ownerID FROM swap WHERE swapID = ?", 'i', $swap)->fetch_row()[0] == $aliceID);
-check('swap: leaves Available Books once requested', !str_contains($bob->get('home.php?available=1'), "$tag shown"));
+check('swap: leaves Available Books once requested', !str_contains($bob->get('home.php?available=1&city=all'), "$tag shown"));
 check('swap: Home shows Not Available', str_contains($carol->get('home.php'), 'Not Available'));
 $carol->post('actions/swap-request.php', ['bookID' => $shown]);
 check('swap: second open request refused', latest_swap($shown) == $swap);
 $reqPage = $alice->get('requests.php');
 check('swap: owner sees the requester by name', str_contains($reqPage, "{$tag}b") && !str_contains($reqPage, 'Requester ID'));
-check('swap: no email shown before accepting', !str_contains($reqPage, "{$tag}b@example.com"));
+check('swap: no email shown before accepting', !str_contains($reqPage, test_email('b')));
 
 $bob->post('actions/swap-update.php', ['swapID' => $swap, 'action' => 'accept']);
 check('swap: requester cannot accept their own request', swap_status($swap) === 'pending');
@@ -281,7 +418,17 @@ $alice->post('actions/swap-update.php', ['swapID' => $swap, 'action' => 'return'
 check('swap: cannot return before accepting', swap_status($swap) === 'pending');
 $alice->post('actions/swap-update.php', ['swapID' => $swap, 'action' => 'accept']);
 check('swap: owner can accept', swap_status($swap) === 'accepted');
-check('swap: contact email shown after accepting', str_contains($bob->get('requests.php'), "{$tag}a@example.com"));
+check('swap: contact email shown after accepting', str_contains($bob->get('requests.php'), test_email('a')));
+$requesterView = $bob->get('requests.php');
+check('contact: requester sees owner email and mobile once accepted', str_contains($requesterView, test_email('a')) && str_contains($requesterView, '+8801700000001'));
+check('contact: requester never sees the owner address', !str_contains($requesterView, 'Owner Lane 1'));
+$ownerView = $alice->get('requests.php');
+check('contact: owner sees requester email and mobile once accepted', str_contains($ownerView, test_email('b')) && str_contains($ownerView, '+8801700000002'));
+check('contact: a meet-up never shares the home address', !str_contains($ownerView, 'Requester Road 2'));
+check('contact: safety advice shows for a meet-up', str_contains($ownerView, 'meet in a public place'));
+check('contact: an unrelated user sees nothing', !$hasContact($carol->get('requests.php'), '+8801700000001', 'Owner Lane 1', test_email('a')));
+check('contact: nothing on the public profile', !$hasContact($carol->get("profile.php?userID=$aliceID"), '+8801700000001', 'Owner Lane 1', test_email('a')));
+check('contact: nothing on the book page', !$hasContact($carol->get("book.php?id=$shown"), '+8801700000001', 'Owner Lane 1', test_email('a')));
 check('swap: shows in the requester\'s Swapped Books', str_contains($bob->get('profile.php?show=borrowed'), "$tag shown"));
 $alice->post('actions/book-delete.php', ['bookID' => $shown]);
 check('swap: a lent book cannot be deleted', db("SELECT 1 FROM books WHERE bookID = ?", 'i', $shown)->num_rows === 1);
@@ -290,6 +437,7 @@ $bob->post('actions/swap-update.php', ['swapID' => $swap, 'action' => 'return'])
 check('swap: requester cannot mark it returned', swap_status($swap) === 'accepted');
 $alice->post('actions/swap-update.php', ['swapID' => $swap, 'action' => 'return']);
 check('swap: owner can mark it returned', swap_status($swap) === 'returned');
+check('contact: hidden again after return', !$hasContact($bob->get('requests.php'), '+8801700000001', 'Owner Lane 1', test_email('a')) && !$hasContact($alice->get('requests.php'), '+8801700000002', 'Requester Road 2', test_email('b')));
 $alice->post('actions/swap-update.php', ['swapID' => $swap, 'action' => 'accept']);
 check('swap: a returned swap cannot be reopened', swap_status($swap) === 'returned');
 
@@ -299,16 +447,55 @@ $carol->post('actions/swap-request.php', ['bookID' => $shown]);
 $swap2 = latest_swap($shown);
 $alice->post('actions/swap-update.php', ['swapID' => $swap2, 'action' => 'decline']);
 check('swap: owner can decline', swap_status($swap2) === 'declined');
-check('swap: no duplicates after several old swaps', substr_count($bob->get('home.php?available=1'), "book-card__title\">$tag shown") === 1);
+check('swap: no duplicates after several old swaps', substr_count($bob->get('home.php?available=1&city=all'), "book-card__title\">$tag shown") === 1);
 $carol->post('actions/swap-request.php', ['bookID' => $shown]);
 $swap3 = latest_swap($shown);
 $alice->post('actions/swap-update.php', ['swapID' => $swap3, 'action' => 'accept']);
-check('swap: lent book with old declined swap stays hidden (finding 8)', !str_contains($bob->get('home.php?available=1'), "$tag shown"));
+check('swap: lent book with old declined swap stays hidden (finding 8)', !str_contains($bob->get('home.php?available=1&city=all'), "$tag shown"));
 $alice->post('actions/swap-update.php', ['swapID' => $swap3, 'action' => 'return']);
 $bob->post('actions/swap-request.php', ['bookID' => $shown]);
 $swap4 = latest_swap($shown);
 $bob->post('actions/swap-update.php', ['swapID' => $swap4, 'action' => 'cancel']);
 check('swap: requester can cancel', swap_status($swap4) === null);
+
+// ---- Handover choice, note and courier
+$shareForm = $alice->get('add-book.php');
+check('handover: the add form offers all three options', str_contains($shareForm, 'value="meet"') && str_contains($shareForm, 'value="courier"') && str_contains($shareForm, 'value="both"'));
+check('share: new books are shared by default', str_contains($shareForm, 'name="share" value="1" checked'));
+$alice->post('add-book.php', ['title' => "$tag either", 'author' => 'A', 'year_published' => '2000', 'handover' => 'both', 'share' => '1'], 'add-book.php');
+$either = db("SELECT b.bookID, b.handover, c.showcase FROM books b JOIN collection c ON b.bookID = c.bookID WHERE b.title = ?", 's', "$tag either")->fetch_assoc();
+check('handover: saved on the book, and shared', $either['handover'] === 'both' && $either['showcase'] == 1);
+$alice->post('edit-book.php?id=' . $either['bookID'], ['title' => "$tag either", 'author' => 'A', 'year_published' => '2000', 'handover' => 'both'], 'edit-book.php?id=' . $either['bookID']);
+$page = $bob->get('book.php?id=' . $either['bookID']);
+check('handover: the requester chooses when both are offered', str_contains($page, 'How would you like to get it?') && str_contains($page, 'name="message"'));
+$bob->post('actions/swap-request.php', ['bookID' => $either['bookID']]);
+check('handover: a choice is required when both are offered', latest_swap($either['bookID']) === null);
+$bob->post('actions/swap-request.php', ['bookID' => $either['bookID'], 'handover' => 'teleport']);
+check('handover: a made-up method is refused', latest_swap($either['bookID']) === null);
+$bob->post('actions/swap-request.php', ['bookID' => $either['bookID'], 'handover' => 'meet', 'message' => str_repeat('x', 301)]);
+check('note: over 300 characters is refused', latest_swap($either['bookID']) === null);
+db("UPDATE users SET address = NULL WHERE userID = ?", 'i', $bobID);
+$bob->post('actions/swap-request.php', ['bookID' => $either['bookID'], 'handover' => 'courier']);
+check('courier: needs a delivery address first', latest_swap($either['bookID']) === null && str_ends_with($bob->url, 'settings.php'));
+db("UPDATE users SET address = 'Requester Road 2' WHERE userID = ?", 'i', $bobID);
+$note = "Can you send it <b>next week</b>?";
+$bob->post('actions/swap-request.php', ['bookID' => $either['bookID'], 'handover' => 'courier', 'message' => $note]);
+$courierSwap = latest_swap($either['bookID']);
+$saved = db("SELECT handover, message FROM swap WHERE swapID = ?", 'i', $courierSwap)->fetch_assoc();
+check('courier: method and note are saved', $saved === ['handover' => 'courier', 'message' => $note]);
+$ownerView = $alice->get('requests.php');
+check('note: the owner reads it, safely escaped', str_contains($ownerView, htmlspecialchars($note)) && !str_contains($ownerView, '<b>next week'));
+check('courier: address stays hidden before accepting', !str_contains($ownerView, 'Requester Road 2'));
+$alice->post('actions/swap-update.php', ['swapID' => $courierSwap, 'action' => 'accept']);
+check('courier: the owner sees the delivery address once accepted', str_contains($alice->get('requests.php'), 'Requester Road 2'));
+check('courier: the borrower still never sees the owner address', !str_contains($bob->get('requests.php'), 'Owner Lane 1'));
+$alice->post('actions/swap-update.php', ['swapID' => $courierSwap, 'action' => 'return']);
+check('courier: the address is hidden again after return', !str_contains($alice->get('requests.php'), 'Requester Road 2'));
+$alice->post('edit-book.php?id=' . $either['bookID'], ['title' => "$tag either", 'author' => 'A', 'year_published' => '2000', 'handover' => 'courier'], 'edit-book.php?id=' . $either['bookID']);
+check('handover: the owner can change it', db("SELECT handover FROM books WHERE bookID = ?", 'i', $either['bookID'])->fetch_row()[0] === 'courier');
+$bob->post('actions/swap-request.php', ['bookID' => $either['bookID'], 'handover' => 'meet']);
+check('handover: a request can\'t override a courier-only book', db("SELECT handover FROM swap WHERE swapID = ?", 'i', latest_swap($either['bookID']))->fetch_row()[0] === 'courier');
+$bob->post('actions/swap-update.php', ['swapID' => latest_swap($either['bookID']), 'action' => 'cancel']);
 
 // ---- Findings 14, 15: feedback
 $comment = "Don't miss it, a<b \"really\"";
@@ -397,7 +584,7 @@ if (cloudinary_enabled()) {
     $alice->post('actions/book-delete.php', ['bookID' => $photoBook]);
     check('upload: deleting a book deletes its image', $third && cloudinary_asset($third) === null);
 
-    $profile = ['first_name' => 'A', 'last_name' => 'B', 'email' => "{$tag}a@example.com", 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a"];
+    $profile = ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a"];
     $alice->upload('settings.php', $profile, ['avatar' => $red], 'settings.php');
     $avatarID = db("SELECT avatar_public_id FROM users WHERE userID = ?", 'i', $aliceID)->fetch_row()[0];
     check('upload: an avatar goes in the avatars folder', str_starts_with((string) $avatarID, 'bookworm-buddies/avatars/'));
@@ -426,7 +613,7 @@ $carol->get('profile.php');
 check('logout: a plain link does not log out', str_ends_with($carol->url, 'profile.php'));
 $carol->post('actions/logout.php', []);
 $carol->get('profile.php');
-check('logout: works', str_ends_with($carol->url, 'index.php'));
+check('logout: works', str_ends_with($carol->url, 'signin.php'));
 
 $aliceBook = add_book($alice, "$tag doomed");
 $bob->post('actions/feedback-add.php', ['bookID' => $aliceBook, 'comment' => 'nice']);
@@ -442,8 +629,8 @@ check('account: other users remain', user_id('b') !== null);
 foreach (array_filter($imagesToGo) as $image) {
     check('account: their Cloudinary image is deleted', cloudinary_asset($image) === null);
 }
-$alice->get('home.php');
-check('account: session ended', str_ends_with($alice->url, 'index.php'));
+$alice->get('profile.php');
+check('account: session ended', str_ends_with($alice->url, 'signin.php'));
 
 echo "\n", $checks - $failures, " of $checks checks passed\n";
 exit($failures ? 1 : 0);

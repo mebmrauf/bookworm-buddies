@@ -7,11 +7,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
     <link rel="stylesheet" href="/assets/app.css">
+    <script src="/assets/app.js" defer></script>
 </head>
 <body class="auth">
     <aside class="auth__aside">
         <div class="auth__pitch">
-            <p class="brand brand--light"><?= icon('book') ?><span>Bookworm Buddies</span></p>
+            <a class="brand brand--light" href="/"><?= icon('book') ?><span>Bookworm Buddies</span></a>
             <p class="auth__quote">Your next favorite book is on a neighbor's shelf.</p>
             <p>Share the books you've finished and borrow the ones you haven't read yet.</p>
         </div>

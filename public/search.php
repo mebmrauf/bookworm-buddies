@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../src/auth.php';
+require_once __DIR__ . '/../src/bootstrap.php';
 
 $q = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
 // % and _ are wildcards in LIKE, so a search for "%" must not match everything.
@@ -8,7 +8,7 @@ $pattern = '%' . addcslashes($q, '%_\\') . '%';
 $books = $people = null;
 if ($q !== '') {
     $books = run("
-        SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, u.userID AS ownerID, u.username
+        SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, u.userID AS ownerID, u.username, u.city, u.area
         FROM books b
         JOIN collection c ON b.bookID = c.bookID
         JOIN users u ON c.userID = u.userID
@@ -16,7 +16,8 @@ if ($q !== '') {
         ORDER BY b.title
     ", 'ssi', $pattern, $pattern, $userID)->get_result();
 
-    $people = run("
+    // Finding people is for members, so names can't be scraped by anyone passing by.
+    $people = !$userID ? null : run("
         SELECT userID, username, first_name, last_name, avatar_public_id
         FROM users
         WHERE username LIKE ? OR first_name LIKE ? OR last_name LIKE ?
@@ -31,14 +32,14 @@ include __DIR__ . '/../templates/top.php';
 <?php if ($q === ''): ?>
     <div class="empty">
         <h1>Search</h1>
-        <p class="muted">Please enter a search term to find books and people.</p>
+        <p class="muted">Please enter a search term.</p>
     </div>
 <?php else: ?>
     <div class="page-head">
         <h1>Results for "<?= e($q) ?>"</h1>
     </div>
 
-    <?php if ($people->num_rows > 0): ?>
+    <?php if ($people && $people->num_rows > 0): ?>
         <section class="section">
             <h2>People</h2>
             <ul class="people">
@@ -65,7 +66,7 @@ include __DIR__ . '/../templates/top.php';
         </section>
     <?php endif; ?>
 
-    <?php if ($books->num_rows === 0 && $people->num_rows === 0): ?>
+    <?php if ($books->num_rows === 0 && (!$people || $people->num_rows === 0)): ?>
         <div class="empty">
             <h2>Nothing found</h2>
             <p class="muted">Try a different title, author or name.</p>

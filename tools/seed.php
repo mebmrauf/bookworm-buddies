@@ -115,13 +115,21 @@ $feedback = [
     ['Clean Code', 'farhana.akter', 'Some advice is dated, but it made me a tidier programmer.', null],
 ];
 
+// username => [city, area]
+$places = [
+    'farhana.akter' => ['Dhaka', 'Dhanmondi'], 'tanvir_hossain' => ['Dhaka', 'Mohakhali'], 'sadia.islam' => ['Dhaka', 'Uttara'],
+    'arif_chowdhury' => ['Chittagong', 'Agrabad'], 'maliha.karim' => ['Dhaka', 'Mirpur'], 'imran_sarker' => ['Sylhet', 'Zindabazar'],
+    'priya.das' => ['Chittagong', 'GEC Circle'], 'rakib_mahmud' => ['Dhaka', 'Banani'], 'anika.sultana' => ['Rajshahi', 'Shaheb Bazar'],
+    'zubair_ahmed' => ['Dhaka', 'Gulshan'], 'emily.carter' => ['Dhaka', 'Bashundhara'], 'daniel_brooks' => ['Khulna', 'Sonadanga'],
+];
+
 $accounts = [];
 $books = [];
 $userIDs = [];
 
 $conn->begin_transaction();
 
-$addUser = $conn->prepare("INSERT INTO users (username, password, email, first_name, last_name, date_of_birth) VALUES (?, ?, ?, ?, ?, ?)");
+$addUser = $conn->prepare("INSERT INTO users (username, password, email, first_name, last_name, date_of_birth, email_verified_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
 $addBook = $conn->prepare("INSERT INTO books (title, author, year_published) VALUES (?, ?, ?)");
 $addCopy = $conn->prepare("INSERT INTO collection (userID, bookID, showcase) VALUES (?, ?, ?)");
 $addSwap = $conn->prepare("INSERT INTO swap (requesterID, ownerID, bookID, status) VALUES (?, ?, ?, ?)");
@@ -134,6 +142,10 @@ foreach ($people as $username => [$first, $last, $dob, $list]) {
     $addUser->bind_param('ssssss', $username, $hash, $email, $first, $last, $dob);
     $addUser->execute();
     $userIDs[$username] = $conn->insert_id;
+    [$city, $area] = $places[$username];
+    $setPlace = $conn->prepare("UPDATE users SET city = ?, area = ? WHERE userID = ?");
+    $setPlace->bind_param('ssi', $city, $area, $userIDs[$username]);
+    $setPlace->execute();
     $accounts[] = "$username  $password  ($first $last)";
 
     foreach ($list as [$title, $author, $year, $showcase]) {
@@ -168,6 +180,7 @@ foreach ($feedback as [$title, $person, $comment, $reply]) {
     $addFeedback->execute();
 }
 
+$conn->query("UPDATE books SET handover = 'both' WHERE MOD(bookID, 3) = 0");
 $conn->commit();
 
 // Outside public/, so the passwords can't be downloaded from the website.

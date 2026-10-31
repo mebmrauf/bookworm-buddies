@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/../src/auth.php';
 
-$values = ['bookID' => 0, 'title' => post('title'), 'author' => post('author'), 'year_published' => post('year_published')];
+$values = ['bookID' => 0, 'title' => post('title'), 'author' => post('author'), 'year_published' => post('year_published'), 'handover' => isset(HANDOVERS[post('handover')]) ? post('handover') : 'meet'];
+$share = $_SERVER['REQUEST_METHOD'] !== 'POST' || post('share') === '1';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf('/add-book.php');
@@ -11,11 +12,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $cover = upload_image_field('cover', 'covers');
             $conn->begin_transaction();
-            run("INSERT INTO books (title, author, year_published, cover_public_id) VALUES (?, ?, ?, ?)", 'ssis', $values['title'], $values['author'], $values['year_published'], $cover);
+            run("INSERT INTO books (title, author, year_published, cover_public_id, handover) VALUES (?, ?, ?, ?, ?)", 'ssiss', $values['title'], $values['author'], $values['year_published'], $cover, $values['handover']);
             $newID = $conn->insert_id;
-            run("INSERT INTO collection (userID, bookID, showcase) VALUES (?, ?, 0)", 'ii', $userID, $newID);
+            run("INSERT INTO collection (userID, bookID, showcase) VALUES (?, ?, ?)", 'iii', $userID, $newID, $share ? 1 : 0);
             $conn->commit();
-            flash('Book added. Showcase it when you are ready to share.', "/book.php?id=$newID", 'success');
+            flash($share ? 'Book added and shared.' : 'Book added. Only you can see it for now.', "/book.php?id=$newID", 'success');
         } catch (ImageError $ex) {
             $error = $ex->getMessage();
         }
@@ -28,10 +29,11 @@ include __DIR__ . '/../templates/top.php';
 ?>
 <div class="narrow">
     <h1>Add a book</h1>
-    <p class="muted">New books stay private until you showcase them.</p>
+    <p class="muted">Share something from your shelf. You can change or remove it at any time.</p>
     <?php
     $action = '/add-book.php';
     $submitLabel = 'Add book';
+    $shareOption = $share;
     include __DIR__ . '/../templates/book-form.php';
     ?>
 </div>

@@ -16,4 +16,4 @@ $conn->commit();
 delete_images($images);
 session_unset();
 session_destroy();
-go('/index.php');
+go('/');

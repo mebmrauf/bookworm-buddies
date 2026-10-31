@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/bootstrap.php';
 
-if (empty($_SESSION['user_id'])) {
-    go('/index.php');
+if (!$userID) {
+    $_SESSION['next'] = $_SERVER['REQUEST_METHOD'] === 'GET' ? ($_SERVER['REQUEST_URI'] ?? null) : null;
+    go('/signin.php');
 }
-$userID = (int) $_SESSION['user_id'];
