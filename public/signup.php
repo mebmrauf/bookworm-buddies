@@ -82,7 +82,7 @@ include __DIR__ . '/../templates/auth-top.php';
         <input id="password" type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="password-help" required>
         <p class="help" id="password-help">At least 8 characters.</p>
     </div>
-    <label class="check"><input type="checkbox" name="agree" value="1"<?= post('agree') === '1' ? ' checked' : '' ?> required> <span>I agree to the <a class="link" href="/rules.php" target="_blank" rel="noopener">community rules</a></span></label>
+    <label class="check"><input type="checkbox" name="agree" value="1"<?= post('agree') === '1' ? ' checked' : '' ?> required> <span>I agree to the <a class="link" href="/rules.php" target="_blank" rel="noopener">community rules and policies</a></span></label>
     <button class="btn btn--primary btn--block" type="submit">Create account</button>
 </form>
 <p class="auth__switch">Already have an account? <a class="link" href="/signin.php">Sign in</a></p>

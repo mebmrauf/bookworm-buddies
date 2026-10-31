@@ -433,7 +433,8 @@ html.is-loading button[aria-busy="true"] { opacity: 0.7; cursor: progress; }
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 16px 96px;
+  /* Keeps the end of the page clear of the phone tab bar. */
+  padding: 24px 16px calc(80px + env(safe-area-inset-bottom));
 }
 
 .narrow {
@@ -460,7 +461,8 @@ html.is-loading button[aria-busy="true"] { opacity: 0.7; cursor: progress; }
 .page-head + .section { margin-top: 0; }
 
 .footer {
-  padding: 20px 16px 88px;
+  display: none;
+  padding: 10px 16px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.875rem;
@@ -1069,7 +1071,10 @@ html.is-loading button[aria-busy="true"] { opacity: 0.7; cursor: progress; }
 }
 
 .prose { max-width: 720px; }
-.prose h2 { margin-top: 28px; margin-bottom: 8px; }
+.prose h2 { margin-top: 36px; margin-bottom: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.prose h3 { margin-top: 18px; margin-bottom: 6px; }
+.prose p { margin-bottom: 10px; }
+.prose__contents { margin: 12px 0 0; padding: 12px 16px 12px 32px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 .prose li { margin-bottom: 6px; }
 
 /* Forms */
@@ -1267,7 +1272,11 @@ input.upload__input.upload__input {
 
 /* Landing page */
 
-.landing { flex: 1; width: 100%; }
+.landing {
+  flex: 1;
+  width: 100%;
+  padding-bottom: calc(56px + env(safe-area-inset-bottom));
+}
 
 .landing > .notice { max-width: 1200px; margin: 16px auto; }
 
@@ -1378,12 +1387,6 @@ input.upload__input.upload__input {
 }
 
 .landing__cta p { max-width: 36em; }
-
-.footer__note {
-  max-width: 40em;
-  margin: 6px auto 0;
-  font-size: 0.8rem;
-}
 
 select {
   width: 100%;
@@ -1500,9 +1503,10 @@ select {
   .nav__add.nav__add:hover { background: var(--accent-hover); color: var(--on-accent); }
 
   .page { padding: 32px 24px 56px; }
+  .landing { padding-bottom: 0; }
   .hero { padding: 64px 24px; }
   .landing__section { padding: 56px 24px; }
-  .footer { padding-bottom: 20px; }
+  .footer { display: block; }
   .book-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .book-detail { grid-template-columns: 300px 1fr; gap: 48px; }
 

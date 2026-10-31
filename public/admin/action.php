@@ -41,7 +41,7 @@ switch ($do) {
         run("UPDATE swap SET status = 'declined' WHERE status = 'pending' AND (ownerID = ? OR requesterID = ?)", 'ii', $id, $id);
         admin_log('suspend', 'user', $id, $reason);
         $conn->commit();
-        notify($user['email'], $user['first_name'], 'Your Bookworm Buddies account is suspended', "Your account was suspended for this reason: $reason. Please see the community rules for how to get in touch.");
+        notify($user['email'], $user['first_name'], 'Your Bookworm Buddies account is suspended', "Your account was suspended for this reason: $reason. You can ask us to look again by following the steps in our rules and policies: " . rtrim(config('app_url') ?: 'http://localhost:8000', '/') . "/rules.php#enforcement");
         $done = 'User suspended.';
         break;
 
