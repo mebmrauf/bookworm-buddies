@@ -13,7 +13,7 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <?php include __DIR__ . '/pwa-head.php'; ?>
-    <title><?= e($pageTitle) ?> - Bookworm Buddies</title>
+    <title><?= $pageTitle === 'Bookworm Buddies' ? e($pageTitle) : e($pageTitle) . ' - Bookworm Buddies' ?></title>
     <?php if (isset($pageDescription)): ?><meta name="description" content="<?= e($pageDescription) ?>"><?php endif; ?>
     <link rel="preload" href="/assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
     <script type="speculationrules">{"prefetch":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/actions/*"}},{"not":{"href_matches":"/verify*"}},{"not":{"href_matches":"/chat*"}}]},"eagerness":"moderate"}]}</script>
@@ -35,6 +35,7 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
             </form>
             <nav class="nav" aria-label="Main">
                 <a href="/home.php"<?= $current('browse') ?>><?= icon('compass') ?><span>Browse</span></a>
+                <a href="/blog.php"<?= $current('blog') ?>><?= icon('pen') ?><span>Blog</span></a>
                 <?php if ($me): ?>
                     <a href="/requests.php"<?= $current('requests') ?>><?= icon('inbox') ?><span>Requests</span><?php if ($me['pending'] > 0): ?><span class="badge" aria-label="<?= (int) $me['pending'] ?> waiting for you"><?= (int) $me['pending'] ?></span><?php endif; ?></a>
                     <a href="/profile.php"<?= $current('library') ?>><?= icon('user') ?><span>My books</span></a>

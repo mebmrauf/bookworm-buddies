@@ -43,6 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'ssssssssssssi', $user['first_name'], $user['last_name'], $user['username'], $pendingEmail, $optional($user['city']), $optional($user['area']),
                 $optional($user['date_of_birth']), $optional($user['gender']), $optional($user['mobile']), $optional($user['address']), $hash, $avatar, $userID
             );
+            // Browse filters on this copy of the city, so it doesn't have to look up every owner.
+            run("UPDATE collection SET city = ? WHERE userID = ?", 'si', $optional($user['city']), $userID);
             if ($avatar !== $oldAvatar) {
                 delete_images([$oldAvatar]);
             }

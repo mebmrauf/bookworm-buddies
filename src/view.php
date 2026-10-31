@@ -23,6 +23,7 @@ function icon($name) {
         'eye' => '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/>',
         'eye-off' => '<path d="M10.7 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-2.2 3.2"/><path d="M6.6 6.6A18 18 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m2 2 20 20"/>',
         'external' => '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+        'pen' => '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
         'pin' => '<path d="M20 10c0 5-8 12-8 12s-8-7-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
         'login' => '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
     ];
@@ -110,6 +111,25 @@ function report_form($type, $id) {
     </details>
     <?php
     return ob_get_clean();
+}
+
+// Short lines from named works, because many popular "book quotes" online are misattributed.
+const BOOK_QUOTES = [
+    ['Books are a uniquely portable magic.', 'Stephen King', 'On Writing'],
+    ['I have always imagined that Paradise will be a kind of library.', 'Jorge Luis Borges', 'Poem of the Gifts'],
+    ['The reading of all good books is like a conversation with the finest minds of past centuries.', 'René Descartes', 'Discourse on Method'],
+    ['I declare after all there is no enjoyment like reading!', 'Jane Austen', 'Pride and Prejudice'],
+    ['The person, be it gentleman or lady, who has not pleasure in a good novel, must be intolerably stupid.', 'Jane Austen', 'Northanger Abbey'],
+    ['Reading is to the mind what exercise is to the body.', 'Richard Steele', 'The Tatler'],
+    ['Books are the quietest and most constant of friends.', 'Charles W. Eliot', 'The Happy Life'],
+    ['A reader lives a thousand lives before he dies. The man who never reads lives only one.', 'George R.R. Martin', 'A Dance with Dragons'],
+    ['Until I feared I would lose it, I never loved to read. One does not love breathing.', 'Harper Lee', 'To Kill a Mockingbird'],
+];
+
+function quote_of_the_day() {
+    [$text, $author, $work] = BOOK_QUOTES[(int) date('z') % count(BOOK_QUOTES)];
+    return '<figure class="book-quote"><p class="book-quote__label">Quote of the day</p><blockquote>' . e($text) . '</blockquote>'
+        . '<figcaption>' . e($author) . ', <cite>' . e($work) . '</cite></figcaption></figure>';
 }
 
 function location_label($person) {

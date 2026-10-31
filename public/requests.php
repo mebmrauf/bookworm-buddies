@@ -16,6 +16,7 @@ $rows = run("
     LEFT JOIN books offered ON s.offered_bookID = offered.bookID
     WHERE s.ownerID = ? OR s.requesterID = ?
     ORDER BY s.status = 'pending' DESC, s.status = 'accepted' DESC, s.swapID DESC
+    LIMIT 100
 ", 'iiii', $userID, $userID, $userID, $userID)->get_result()->fetch_all(MYSQLI_ASSOC);
 
 $incoming = array_filter($rows, fn($row) => $row['ownerID'] == $userID);

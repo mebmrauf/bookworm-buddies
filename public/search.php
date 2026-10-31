@@ -1,27 +1,16 @@
 <?php
 require_once __DIR__ . '/../src/bootstrap.php';
+require_once __DIR__ . '/../src/search.php';
+
+const SEARCH_PAGE_LIMIT = 40;
+const SEARCH_PEOPLE_LIMIT = 12;
 
 $q = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
-$pattern = like_pattern($q);
-
 $books = $people = null;
 if ($q !== '') {
-    $books = run("
-        SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, u.userID AS ownerID, u.username, u.city, u.area
-        FROM books b
-        JOIN collection c ON b.bookID = c.bookID
-        JOIN users u ON c.userID = u.userID
-        WHERE (b.title LIKE ? OR b.author LIKE ?) AND ((" . VISIBLE_BOOK . ") OR c.userID = ?)
-        ORDER BY b.title
-    ", 'ssi', $pattern, $pattern, $userID)->get_result();
-
+    $books = search_books($q, $userID, SEARCH_PAGE_LIMIT);
     // Finding people is for members, so names can't be scraped by anyone passing by.
-    $people = !$userID ? null : run("
-        SELECT userID, username, first_name, last_name, avatar_public_id
-        FROM users
-        WHERE suspended_at IS NULL AND (username LIKE ? OR first_name LIKE ? OR last_name LIKE ?)
-        ORDER BY first_name
-    ", 'sss', $pattern, $pattern, $pattern)->get_result();
+    $people = $userID ? search_people($q, SEARCH_PEOPLE_LIMIT) : null;
 }
 
 $pageTitle = 'Search';

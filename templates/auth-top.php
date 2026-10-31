@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <?php include __DIR__ . '/pwa-head.php'; ?>
-    <title><?= e($pageTitle) ?> - Bookworm Buddies</title>
+    <title><?= $pageTitle === 'Bookworm Buddies' ? e($pageTitle) : e($pageTitle) . ' - Bookworm Buddies' ?></title>
     <link rel="preload" href="/assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="<?= asset('app.css') ?>">
     <script src="<?= asset('app.js') ?>" defer></script>

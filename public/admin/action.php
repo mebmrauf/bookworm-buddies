@@ -11,7 +11,7 @@ $reason = post('reason');
 $back = post('back');
 $back = str_starts_with($back, '/admin/') && !str_contains($back, '//') ? $back : '/admin/index.php';
 
-if (in_array($do, ['suspend', 'remove_cover', 'takedown'], true) && ($reason === '' || mb_strlen($reason) > 255)) {
+if (in_array($do, ['suspend', 'remove_cover', 'takedown', 'takedown_post'], true) && ($reason === '' || mb_strlen($reason) > 255)) {
     flash('Please give a reason of up to 255 characters.', $back);
 }
 
@@ -101,6 +101,23 @@ switch ($do) {
         run("DELETE FROM ratings WHERE ratingID = ?", 'i', $id);
         admin_log('delete_rating', 'rating', $id, $text ? mb_substr($text, 0, 255) : null);
         $done = 'Rating deleted.';
+        break;
+
+    case 'takedown_post':
+        $post = run("SELECT p.title, u.email, u.first_name FROM posts p JOIN users u ON p.userID = u.userID WHERE p.postID = ?", 'i', $id)->get_result()->fetch_assoc();
+        if (!$post) {
+            flash('That post was not found.', $back);
+        }
+        run("UPDATE posts SET removed_at = NOW(), removed_reason = ? WHERE postID = ?", 'si', $reason, $id);
+        admin_log('takedown_post', 'post', $id, $reason);
+        notify($post['email'], $post['first_name'], "Post taken down: {$post['title']}", "An admin took down your blog post, {$post['title']}, for this reason: $reason. Only you can see it now.");
+        $done = 'Post taken down.';
+        break;
+
+    case 'restore_post':
+        run("UPDATE posts SET removed_at = NULL, removed_reason = NULL WHERE postID = ?", 'i', $id);
+        admin_log('restore_post', 'post', $id);
+        $done = 'Post restored.';
         break;
 
     case 'delete_message':

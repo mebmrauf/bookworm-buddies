@@ -1,6 +1,7 @@
 <?php
 const MAX_MESSAGE_LENGTH = 1000;
 const MAX_MESSAGES_PER_MINUTE = 20;
+const CHAT_PAGE_SIZE = 200;
 
 // A swap this person is part of, once it has been accepted. A chat opens at acceptance.
 function chat_swap($swapID, $userID) {
@@ -20,18 +21,18 @@ function chat_is_open($swap) {
     return $swap['status'] === 'accepted' && !$swap['ownerSuspended'] && !$swap['requesterSuspended'];
 }
 
+// The newest messages on opening a chat, then only what's new on each check.
 function chat_messages($swapID, $userID, $afterID = 0) {
+    $newestFirst = $afterID === 0;
     $rows = run("
         SELECT messageID, senderID, body, UNIX_TIMESTAMP(created_at) AS sentAt
         FROM messages WHERE swapID = ? AND messageID > ?
-        ORDER BY messageID
-        LIMIT 500
-    ", 'ii', $swapID, $afterID)->get_result();
-    $messages = [];
-    while ($row = $rows->fetch_assoc()) {
-        $messages[] = chat_format($row, $userID);
-    }
-    return $messages;
+        ORDER BY messageID " . ($newestFirst ? 'DESC' : 'ASC') . "
+        LIMIT " . CHAT_PAGE_SIZE,
+        'ii', $swapID, $afterID
+    )->get_result()->fetch_all(MYSQLI_ASSOC);
+    $rows = $newestFirst ? array_reverse($rows) : $rows;
+    return array_map(fn($row) => chat_format($row, $userID), $rows);
 }
 
 function chat_format($row, $userID) {

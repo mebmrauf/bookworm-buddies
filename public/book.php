@@ -41,6 +41,7 @@ $feedback = run("
     FROM feedback f JOIN users u ON f.userID = u.userID
     WHERE f.bookID = ?
     ORDER BY f.feedbackID
+    LIMIT 100
 ", 'i', $bookID)->get_result();
 
 $myAddress = current_user()['address'] ?? null;

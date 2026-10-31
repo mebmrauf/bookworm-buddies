@@ -19,6 +19,7 @@ include __DIR__ . '/../templates/top.php';
         <ul class="prose__contents">
             <li><a class="link" href="#rules">Community rules</a></li>
             <li><a class="link" href="#enforcement">Suspensions and removed content</a></li>
+            <li><a class="link" href="#blog">Blog posts</a></li>
             <li><a class="link" href="#exchanges">Exchanges and safety</a></li>
             <li><a class="link" href="#privacy">Your information</a></li>
             <li><a class="link" href="#copyright">Book covers and copyright</a></li>
@@ -54,7 +55,7 @@ include __DIR__ . '/../templates/top.php';
 
     <h2 id="enforcement">Suspensions and removed content</h2>
     <h3>How problems reach us</h3>
-    <p>Signed-in members can use the Report link on any book, profile, comment or rating, and on messages sent to them in chat. A person reviews each report. Your report isn't shown to the member you reported. Please don't report people falsely or to get back at them, because that breaks these rules too.</p>
+    <p>Signed-in members can use the Report link on any book, profile, blog post, comment or rating, and on messages sent to them in chat. A person reviews each report. Your report isn't shown to the member you reported. Please don't report people falsely or to get back at them, because that breaks these rules too.</p>
 
     <h3>What we can remove</h3>
     <p>For a smaller or first-time problem, we may only remove the content involved:</p>
@@ -96,6 +97,13 @@ include __DIR__ . '/../templates/top.php';
     <h3>Asking us to look again</h3>
     <p>If you think we got it wrong, email <?= $contactLink ?> from your account's email address. We'll look at it again, but this is a hobby project, so a reply can take time. If we lift a suspension, your account and books come back as they were, apart from any requests that were closed.</p>
 
+    <h2 id="blog">Blog posts</h2>
+    <ul>
+        <li>Write about books you've really read, in your own words. Don't copy reviews or long passages from elsewhere.</li>
+        <li>Posts are public, and anyone can read them without an account. Don't include your phone number, address or anyone's private details.</li>
+        <li>You can edit or delete your own posts at any time. We may take down a post that breaks these rules, and we'll email you the reason.</li>
+    </ul>
+
     <h2 id="exchanges">Exchanges and safety</h2>
     <ul>
         <li><strong>Loans:</strong> the book stays the owner's. The owner sets a return date, can change it, and marks the book as returned.</li>
@@ -118,7 +126,7 @@ include __DIR__ . '/../templates/top.php';
     <h2 id="privacy">Your information</h2>
     <h3>Who can see what</h3>
     <ul>
-        <li><strong>Anyone, even without an account:</strong> your name, username, city, area, shared books, comments, and any ratings you've given or received. Your profile photo too, if you add one.</li>
+        <li><strong>Anyone, even without an account:</strong> your name, username, city, area, shared books, blog posts, comments, and any ratings you've given or received. Your profile photo too, if you add one.</li>
         <li><strong>The owner of a book you request:</strong> your note, your chosen handover method and the books you offer.</li>
         <li><strong>The other person in a chat:</strong> what you write there, and anything you choose to share. We don't share your email address or mobile number with other members.</li>
         <li><strong>A book's owner, only for an accepted courier request:</strong> the delivery address of the person receiving it. It's never shared for meet-ups, and an owner's address is never shared.</li>
@@ -147,7 +155,7 @@ include __DIR__ . '/../templates/top.php';
     <h3>Your choices</h3>
     <ul>
         <li>You can change your details, or leave the optional ones blank, in Settings.</li>
-        <li>You can delete your account in Settings. This removes your profile, your books and their photos, your requests and their chats, your comments, and ratings given by or about you. Books that already moved to someone else stay with them.</li>
+        <li>You can delete your account in Settings. This removes your profile, your books and their photos, your requests and their chats, your blog posts, your comments, and ratings given by or about you. Books that already moved to someone else stay with them.</li>
         <li>Some information can remain for a while afterwards, such as in database backups, the admin action log and reports. A suspended account is kept so the suspension can be reviewed or enforced.</li>
     </ul>
 

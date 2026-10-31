@@ -1,6 +1,7 @@
 <?php
 const REMIND_DAYS_BEFORE = 3;
 const OVERDUE_REPEAT_DAYS = 7;
+const MAX_REMINDERS_PER_RUN = 200; // Sends take time, so the rest wait for the next run.
 
 // Sends return-date emails. Safe to run often: each one is only sent once, and overdue ones repeat weekly.
 function send_reminders() {
@@ -16,7 +17,7 @@ function send_reminders() {
     ";
     $sent = ['due' => 0, 'overdue' => 0];
 
-    $due = run("$base AND s.due_date >= ? AND s.due_date <= ? AND s.reminded_due_at IS NULL", 'ss', $today, $soon)->get_result()->fetch_all(MYSQLI_ASSOC);
+    $due = run("$base AND s.due_date >= ? AND s.due_date <= ? AND s.reminded_due_at IS NULL LIMIT " . MAX_REMINDERS_PER_RUN, 'ss', $today, $soon)->get_result()->fetch_all(MYSQLI_ASSOC);
     foreach ($due as $swap) {
         $when = date('j F Y', strtotime($swap['due_date']));
         notify($swap['requesterEmail'], $swap['requesterName'], "Reminder: return {$swap['title']} by $when", "{$swap['title']} is due back by $when. Please arrange the return with the owner, or ask them for more time.");
@@ -25,7 +26,7 @@ function send_reminders() {
     }
 
     $overdue = run(
-        "$base AND s.due_date < ? AND (s.reminded_overdue_at IS NULL OR s.reminded_overdue_at < NOW() - INTERVAL " . OVERDUE_REPEAT_DAYS . " DAY)",
+        "$base AND s.due_date < ? AND (s.reminded_overdue_at IS NULL OR s.reminded_overdue_at < NOW() - INTERVAL " . OVERDUE_REPEAT_DAYS . " DAY) LIMIT " . MAX_REMINDERS_PER_RUN,
         's', $today
     )->get_result()->fetch_all(MYSQLI_ASSOC);
     foreach ($overdue as $swap) {

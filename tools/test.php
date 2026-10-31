@@ -1,5 +1,7 @@
 <?php
 // End-to-end checks against a running site: php tools/test.php http://localhost:8000
+// By default this sends no email and uploads nothing, so it can run freely without using up any service's limits.
+// Add --real-services to also call Resend and Cloudinary for real. That uses quota, so save it for rare final checks.
 // Creates zztest_* accounts and removes them at the end. Existing data is not touched.
 if (PHP_SAPI !== 'cli') {
     exit;
@@ -103,8 +105,9 @@ class Browser {
     }
 }
 
-// Resend's test address makes a real API call without reaching anyone. Used only where sending is being tested, to save quota.
-$realEmail = true;
+// example.com addresses never reach Resend. Its test address does, and counts against the sending limit.
+$realServices = in_array('--real-services', $argv, true);
+$realEmail = $realServices;
 function test_email($suffix) {
     global $tag, $realEmail;
     return $realEmail ? "delivered+$tag$suffix@resend.dev" : "$tag$suffix@example.com";
@@ -186,6 +189,7 @@ check('pwa: pages link the manifest and icons', str_contains($home, 'rel="manife
 // ---- Guests can look around
 $html = $anon->get('');
 check('guest: landing page loads', $anon->code === 200 && str_contains($html, 'How it works') && str_contains($html, 'Join free'));
+check('guest: landing page shows a book quote', str_contains($html, 'Quote of the day') && str_contains($html, '<cite>'));
 check('guest: landing page shows books', str_contains($html, 'book-card__title'));
 $html = $anon->get('home.php');
 check('guest: browse page is public', $anon->code === 200 && str_ends_with($anon->url, 'home.php') && str_contains($html, 'book-card__title'));
@@ -239,7 +243,7 @@ check('signup: splits the name, apostrophe included', $row['first_name'] === 'Te
 check('signup: a username is generated', (bool) preg_match('/^test\.o\.brien[0-9]*$/', $row['username']));
 check('signup: birth date is left empty', $row['date_of_birth'] === null);
 check('signup: the time of agreeing is recorded', db("SELECT rules_accepted_at FROM users WHERE userID = ?", 'i', $row['userID'])->fetch_row()[0] !== null);
-check('signup: Resend accepted the email over HTTPS', $row['verify_sent_at'] !== null);
+check('signup: the confirmation email counts as sent', $row['verify_sent_at'] !== null);
 check('signup: the link is stored only as a hash', strlen((string) $row['verify_token_hash']) === 64);
 $hash = $row['password'];
 check('password stored as a hash', password_verify('correct-horse-1', $hash) && !str_contains($hash, 'correct-horse'));
@@ -414,7 +418,8 @@ $bob->post('settings.php', ['first_name' => 'Test', 'last_name' => 'User', 'emai
 check('location: saves a city and area', db("SELECT city, area FROM users WHERE userID = ?", 'i', $bobID)->fetch_assoc() === ['city' => 'Chittagong', 'area' => 'Agrabad']);
 check('location: refuses a made-up city', str_contains($bob->post('settings.php', ['first_name' => 'Test', 'last_name' => 'User', 'email' => test_email('b'), 'username' => "{$tag}b", 'city' => 'Atlantis']), 'city from the list'));
 $bob->post('settings.php', ['first_name' => 'Test', 'last_name' => 'User', 'email' => test_email('b'), 'username' => "{$tag}b", 'mobile' => '+8801700000002', 'address' => 'Requester Road 2', 'city' => 'Chittagong', 'area' => 'Agrabad']);
-db("UPDATE users SET city = 'Dhaka', area = 'Dhanmondi' WHERE userID = ?", 'i', $aliceID);
+$alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}a", 'city' => 'Dhaka', 'area' => 'Dhanmondi']);
+check('location: a city change reaches the owner\'s books', db("SELECT city FROM collection WHERE bookID = ?", 'i', $shown)->fetch_row()[0] === 'Dhaka');
 check('location: the book card shows the owner\'s area', str_contains($bob->get('home.php?city=all'), 'Dhanmondi, Dhaka'));
 check('location: the city filter narrows results', str_contains($bob->get('home.php?city=Dhaka'), "$tag shown") && !str_contains($bob->get('home.php?city=Sylhet'), "$tag shown"));
 check('location: an unknown city filter shows all', str_contains($bob->get('home.php?city=' . urlencode("x' OR 1=1")), 'across all cities'));
@@ -515,6 +520,58 @@ check('live search: injection is plain text', $suggest($bob, "' OR 1=1 -- ")['bo
 check('live search: an array is refused safely', $bob->get('search-suggest.php?q[]=x') !== false && $bob->code === 200);
 check('live search: results are limited', count($suggest($bob, 'the')['books']) <= 6);
 
+// ---- Search at scale
+db("UPDATE books SET title = ? WHERE bookID = ?", 'si', "The Great $tag Story", $shown);
+check('search: words like "the" do not break a search', str_contains($bob->get('search.php?q=' . urlencode("the great $tag")), "The Great $tag Story"));
+check('search: a word beginning matches', ($suggest($bob, substr($tag, 0, 11))['books'][0]['title'] ?? '') !== '');
+check('search: a search for only "the" still works', $bob->get('search.php?q=the') !== false && $bob->code === 200 && is_array($suggest($bob, 'the')['books']));
+db("UPDATE books SET title = ? WHERE bookID = ?", 'si', "$tag shown", $shown);
+
+// ---- Blog
+$blogFields = fn($overrides = []) => $overrides + ['title' => "Why I love $tag", 'book_title' => "$tag shown", 'book_author' => 'Some Author', 'body' => str_repeat("A book that stayed with me. ", 6) . "\n\nIt's a <b>second</b> paragraph, for $tag."];
+$anonBlog = new Browser();
+check('blog: guests can read the list', str_contains($anonBlog->get('blog.php'), 'Write a post') && $anonBlog->code === 200);
+$anonBlog->get('write-post.php');
+check('blog: guests must sign in to write', str_ends_with($anonBlog->url, 'signin.php'));
+check('blog: a short post is refused', str_contains($bob->post('write-post.php', $blogFields(['body' => 'Too short']), 'write-post.php'), 'characters'));
+check('blog: a missing book is refused', str_contains($bob->post('write-post.php', $blogFields(['book_title' => '']), 'write-post.php'), 'name and author'));
+check('blog: too long a post is refused', str_contains($bob->post('write-post.php', $blogFields(['body' => str_repeat('x', 10001)]), 'write-post.php'), 'characters'));
+$bob->rawPost('write-post.php', $blogFields(['csrf' => 'forged']));
+check('blog: a forged form cannot publish', db("SELECT COUNT(*) FROM posts WHERE userID = ?", 'i', $bobID)->fetch_row()[0] == 0);
+$bob->post('write-post.php', $blogFields(), 'write-post.php');
+$postRow = db("SELECT postID, excerpt, body FROM posts WHERE userID = ? ORDER BY postID DESC LIMIT 1", 'i', $bobID)->fetch_assoc();
+$postID = (int) ($postRow['postID'] ?? 0);
+check('blog: publishing opens the post', $postID > 0 && str_contains($bob->url, "post.php?id=$postID"));
+check('blog: a short excerpt is saved for lists', mb_strlen($postRow['excerpt']) <= 201 && !str_contains($postRow['excerpt'], "\n"));
+$blogPage = $anonBlog->get('blog.php');
+check('blog: it appears on the list for guests', str_contains($blogPage, "Why I love $tag"));
+$postPage = $anonBlog->get("post.php?id=$postID");
+check('blog: guests can read a post', $anonBlog->code === 200 && str_contains($postPage, "Why I love $tag"));
+check('blog: text is escaped and split into paragraphs', str_contains($postPage, '&lt;b&gt;second') && !str_contains($postPage, '<b>second') && substr_count($postPage, "stayed with me.") >= 6);
+check('blog: guests see no report or edit controls', !str_contains($postPage, 'actions/report.php') && !str_contains($postPage, 'write-post.php?id='));
+check('blog: the post links to a copy that can be requested', str_contains($postPage, "/book.php?id=$shown"));
+check('blog: search finds it by book', str_contains($anonBlog->get('blog.php?q=' . urlencode($tag)), "Why I love $tag"));
+check('blog: search with no match is handled', str_contains($anonBlog->get('blog.php?q=' . urlencode("{$tag}zzz")), 'No posts found'));
+check('blog: it appears on the landing page', str_contains($anonBlog->get(''), "Why I love $tag"));
+check('blog: it appears on the author\'s profile', str_contains($anonBlog->get("profile.php?userID=$bobID"), "Why I love $tag"));
+check('blog: a bad page value is handled', $anonBlog->get('blog.php?before=abc&q[]=x') !== false && $anonBlog->code === 200);
+$anonBlog->get('post.php?id=999999999');
+check('blog: a missing post returns 404', $anonBlog->code === 404);
+$carol->get("write-post.php?id=$postID");
+check('blog: others cannot open the edit page', str_ends_with($carol->url, 'blog.php'));
+$carol->post("write-post.php?id=$postID", $blogFields(['title' => 'Hijacked']), 'write-post.php');
+check('blog: others cannot edit it', db("SELECT title FROM posts WHERE postID = ?", 'i', $postID)->fetch_row()[0] === "Why I love $tag");
+$carol->post('actions/post-delete.php', ['postID' => $postID]);
+check('blog: others cannot delete it', db("SELECT 1 FROM posts WHERE postID = ?", 'i', $postID)->num_rows === 1);
+$bob->post("write-post.php?id=$postID", $blogFields(['title' => "Still love $tag"]), "write-post.php?id=$postID");
+check('blog: the author can edit it', db("SELECT title FROM posts WHERE postID = ?", 'i', $postID)->fetch_row()[0] === "Still love $tag");
+db("UPDATE posts SET title = ? WHERE postID = ?", 'si', "Why I love $tag", $postID);
+for ($i = 0; $i < 4; $i++) {
+    db("INSERT INTO posts (userID, title, book_title, book_author, body, excerpt) VALUES (?, 'Extra', 'B', 'A', 'body', 'e')", 'i', $bobID);
+}
+check('blog: publishing is limited per day', str_contains($bob->post('write-post.php', $blogFields(['title' => 'One too many']), 'write-post.php'), 'posts a day'));
+db("DELETE FROM posts WHERE userID = ? AND title = 'Extra'", 'i', $bobID);
+
 // ---- Handover choice, note and courier
 $shareForm = $alice->get('add-book.php');
 check('handover: the add form offers all three options', str_contains($shareForm, 'value="meet"') && str_contains($shareForm, 'value="courier"') && str_contains($shareForm, 'value="both"'));
@@ -595,7 +652,7 @@ function book_image($id) {
     return db("SELECT cover_public_id FROM books WHERE bookID = ?", 'i', $id)->fetch_row()[0] ?? null;
 }
 
-if (cloudinary_enabled()) {
+if (cloudinary_enabled() && $realServices) {
     $bookFields = ['title' => "$tag photo", 'author' => 'Some Author', 'year_published' => '2001'];
     $red = test_image([180, 40, 40]);
     $blue = test_image([40, 40, 180]);
@@ -693,7 +750,7 @@ if (cloudinary_enabled()) {
     $doomedImage = db("SELECT cover_public_id FROM books WHERE title = ?", 's', "$tag doomed photo")->fetch_row()[0] ?? null;
     $imagesToGo = [$avatarID, $doomedImage];
 } else {
-    echo "skip  Cloudinary uploads (no keys in config.php)\n";
+    echo "skip  Cloudinary uploads (add --real-services to run them)\n";
     $imagesToGo = [];
 }
 
@@ -903,7 +960,11 @@ $report($carol, 'book', $shown, 'Not a real reason');
 check('report: a made-up reason is refused', $countReports('book', $shown) == 0);
 $report($carol, 'book', 999999999);
 check('report: a missing target is refused', $countReports('book', 999999999) == 0);
+$report($carol, 'post', $postID);
+check('report: a blog post can be reported', $countReports('post', $postID) == 1);
 $report($carol, 'book', $shown);
+$report($carol, 'post', $postID);
+check('report: a blog post can be reported', $countReports('post', $postID) == 1);
 $report($carol, 'book', $shown);
 check('report: repeats are ignored', $countReports('book', $shown) == 1);
 $report($carol, 'user', $carolID);
@@ -993,6 +1054,23 @@ $adminDo('delete_feedback', $feedbackID);
 check('admin: can delete feedback', db("SELECT 1 FROM feedback WHERE feedbackID = ?", 'i', $feedbackID)->num_rows === 0);
 $adminDo('delete_rating', $ratingRow['ratingID']);
 check('admin: can delete a rating', db("SELECT 1 FROM ratings WHERE ratingID = ?", 'i', $ratingRow['ratingID'])->num_rows === 0);
+check('admin: a reported post appears in the queue', str_contains($admin->get('admin/reports.php'), "Why I love $tag"));
+check('admin: posts are listed', str_contains($admin->get('admin/content.php'), "Why I love $tag"));
+$adminDo('takedown_post', $postID);
+check('admin: taking down a post needs a reason', db("SELECT removed_at FROM posts WHERE postID = ?", 'i', $postID)->fetch_row()[0] === null);
+$adminDo('takedown_post', $postID, 'Copied text');
+$anonBlog->get("post.php?id=$postID");
+check('takedown: the post is gone for readers', $anonBlog->code === 404 && !str_contains($anonBlog->get('blog.php'), "Why I love $tag"));
+check('takedown: the author sees the reason', str_contains($bob->get("post.php?id=$postID"), 'Copied text'));
+$adminDo('restore_post', $postID);
+check('restore: the post returns', str_contains($anonBlog->get("post.php?id=$postID"), "Why I love $tag"));
+$adminDo('suspend', $bobID, 'Testing');
+$anonBlog->get("post.php?id=$postID");
+check('suspend: their posts are hidden', $anonBlog->code === 404 && !str_contains($anonBlog->get('blog.php'), "Why I love $tag"));
+$adminDo('unsuspend', $bobID);
+signin($bob, 'b');
+$bob->post('actions/post-delete.php', ['postID' => $postID]);
+check('blog: the author can delete it', db("SELECT 1 FROM posts WHERE postID = ?", 'i', $postID)->num_rows === 0);
 $reportID = db("SELECT reportID FROM reports WHERE target_type = 'book' AND target_id = ?", 'i', $shown)->fetch_row()[0];
 $adminDo('resolve_report', $reportID);
 check('admin: can close a report', db("SELECT status FROM reports WHERE reportID = ?", 'i', $reportID)->fetch_row()[0] === 'resolved' && !str_contains($admin->get('admin/reports.php'), "$tag shown"));

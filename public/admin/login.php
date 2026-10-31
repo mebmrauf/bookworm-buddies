@@ -34,10 +34,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     go('/admin/index.php');
 }
 
-$pageTitle = 'Admin sign in';
+$pageTitle = 'Admin Login';
 include __DIR__ . '/../../templates/auth-top.php';
 ?>
-<h1>Admin sign in</h1>
+<h1>Admin Login</h1>
 <form class="form" action="/admin/login.php" method="post">
     <?= csrf_field() ?>
     <div class="field">

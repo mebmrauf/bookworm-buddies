@@ -5,7 +5,7 @@ A community site for lending books: share what's on your shelf and borrow what y
 ## Setup
 
 1. Copy `config.example.php` to `config.php` and fill in your database, Cloudinary and Resend details. Add your database's CA certificate as `ca.pem`.
-2. Load the tables from `database/schema.sql`.
+2. Load the tables from `database/schema.sql`, then the indexes from `database/scale.sql`.
 3. Optional: fill an empty database with demo content. Logins are written to `demo-accounts.txt`.
 
    ```bash
@@ -64,7 +64,7 @@ With the site running:
 php tools/test.php http://localhost:8000
 ```
 
-The tests use the configured database. They create `zztest_*` accounts and remove them afterwards.
+The tests use the configured database. They create `zztest_*` accounts and remove them afterwards. By default they send no email and upload no images. Adding `--real-services` calls Resend and Cloudinary for real, which uses your plan's limits, so keep it for rare final checks.
 
 ## Layout
 
