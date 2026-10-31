@@ -39,6 +39,8 @@ if ($terms !== '') {
 
 $hasMore = $terms === '' && count($rows) > PER_PAGE;
 $posts = $terms === '' ? array_slice($rows, 0, PER_PAGE) : $rows;
+$covers = post_covers($posts);
+$headingTag = 'h2';
 
 $pageTitle = $q !== '' ? "Blog posts about \"$q\"" : 'Blog';
 $pageDescription = 'Readers on Bookworm Buddies write about their favorite books: what they loved, and why you might too.';
@@ -70,16 +72,7 @@ include __DIR__ . '/../templates/top.php';
 <?php else: ?>
     <div class="post-grid">
         <?php foreach ($posts as $post): ?>
-            <article class="post-card">
-                <?php if ($post['image_public_id'] && cloudinary_enabled()): ?>
-                    <img class="post-card__image" src="<?= e(image_url($post['image_public_id'], 640, 360, 'c_fill,g_auto')) ?>" width="640" height="360" alt="" loading="lazy" decoding="async">
-                <?php endif; ?>
-                <h2><a href="/post.php?id=<?= (int) $post['postID'] ?>"><?= e($post['title']) ?></a></h2>
-                <p class="muted">On <?= e($post['book_title']) ?> by <?= e($post['book_author']) ?></p>
-                <p><?= e($post['excerpt']) ?></p>
-                <a class="link post-card__more" href="/post.php?id=<?= (int) $post['postID'] ?>" aria-label="Read the full post: <?= e($post['title']) ?>">Read the full post</a>
-                <p class="muted">By <a class="link" href="/profile.php?userID=<?= (int) $post['userID'] ?>"><?= e($post['username']) ?></a> · <?= e(date('j M Y', strtotime($post['created_at'] . ' UTC'))) ?></p>
-            </article>
+            <?php include __DIR__ . '/../templates/post-card.php'; ?>
         <?php endforeach; ?>
     </div>
     <?php if ($hasMore || $before > 0): ?>

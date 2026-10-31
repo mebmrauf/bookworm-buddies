@@ -59,16 +59,27 @@ function run($sql, $types = '', ...$params) {
     return new QueryResult($result, $conn->affected_rows);
 }
 
+function rate_count($key, $seconds) {
+    return run("SELECT COUNT(*) FROM rate_limits WHERE hit_key = ? AND hit_at > NOW() - INTERVAL ? SECOND", 'si', $key, $seconds)->get_result()->fetch_row()[0];
+}
+
+function rate_record($key) {
+    run("INSERT INTO rate_limits (hit_key) VALUES (?)", 's', $key);
+}
+
+function rate_clear($key) {
+    run("DELETE FROM rate_limits WHERE hit_key = ?", 's', $key);
+}
+
 // True once $key has been used $max times within the window. Otherwise records this use.
 // Two requests at the same instant can both slip through, which is fine for slowing down abuse.
 function rate_limited($key, $max, $seconds) {
     if (random_int(1, 200) === 1) {
         run("DELETE FROM rate_limits WHERE hit_at < NOW() - INTERVAL 2 DAY");
     }
-    $used = run("SELECT COUNT(*) FROM rate_limits WHERE hit_key = ? AND hit_at > NOW() - INTERVAL ? SECOND", 'si', $key, $seconds)->get_result()->fetch_row()[0];
-    if ($used >= $max) {
+    if (rate_count($key, $seconds) >= $max) {
         return true;
     }
-    run("INSERT INTO rate_limits (hit_key) VALUES (?)", 's', $key);
+    rate_record($key);
     return false;
 }

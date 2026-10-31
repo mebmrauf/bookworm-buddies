@@ -14,8 +14,8 @@
     <aside class="auth__aside">
         <div class="auth__pitch">
             <a class="brand brand--light" href="/"><?= icon('book') ?><span>Bookworm Buddies</span></a>
-            <p class="auth__quote">Your next favorite book is on a neighbor's shelf.</p>
-            <p>Share the books you've finished and borrow the ones you haven't read yet.</p>
+            <p class="auth__quote"><?= $authHeadline ?? 'Every book deserves <em>another reader.</em>' ?></p>
+            <p><?= e($authText ?? "Borrow from book lovers near you, and pass on the stories you've finished.") ?></p>
         </div>
     </aside>
     <main class="auth__main">

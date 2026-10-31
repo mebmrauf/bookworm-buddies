@@ -58,13 +58,11 @@ Point the web server's document root at `public/`, so `config.php` and everythin
 
 ## Tests
 
-With the site running:
-
 ```bash
-php tools/test.php http://localhost:8000
+php tools/test.php
 ```
 
-The tests use the configured database. They create `zztest_*` accounts and remove them afterwards. By default they send no email and upload no images. Adding `--real-services` calls Resend and Cloudinary for real, which uses your plan's limits, so keep it for rare final checks.
+The tests start their own copy of the site on a separate `bookworm_test` database (create it once from `database/schema.sql` and `database/scale.sql`), so nothing they create appears on the real site. By default they send no email and upload no images. Adding `--real-services` calls Resend and Cloudinary for real, which uses your plan's limits, so keep it for rare final checks.
 
 ## Layout
 

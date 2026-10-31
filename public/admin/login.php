@@ -16,20 +16,18 @@ if (!empty($_SESSION['is_admin'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf('/admin/login.php');
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-    run("DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL 15 MINUTE");
-    $attempts = run("SELECT COUNT(*) FROM login_attempts WHERE username = 'admin' AND ip = ?", 's', $ip)->get_result()->fetch_row()[0];
     // From every connection together too, so changing IP doesn't allow endless guesses.
-    if ($attempts >= MAX_ATTEMPTS || rate_limited('admin-login:all', MAX_ALL_ATTEMPTS, 900)) {
+    if (rate_count("admin-fail:$ip", 900) >= MAX_ATTEMPTS || rate_limited('admin-login:all', MAX_ALL_ATTEMPTS, 900)) {
         flash('Too many failed attempts. Please try again in 15 minutes.', '/admin/login.php');
     }
 
     $emailMatches = hash_equals(strtolower($admin['email']), strtolower(post('email')));
     if (!password_verify(post('password', false), $admin['password_hash']) || !$emailMatches) {
-        run("INSERT INTO login_attempts (username, ip) VALUES ('admin', ?)", 's', $ip);
+        rate_record("admin-fail:$ip");
         flash('Invalid email or password.', '/admin/login.php');
     }
 
-    run("DELETE FROM login_attempts WHERE username = 'admin' AND ip = ?", 's', $ip);
+    rate_clear("admin-fail:$ip");
     session_regenerate_id(true);
     $_SESSION['is_admin'] = true;
     admin_log('login', null, null);
@@ -48,13 +46,7 @@ include __DIR__ . '/../../templates/auth-top.php';
     </div>
     <div class="field">
         <label for="password">Password</label>
-        <div class="password-field">
-            <input id="password" type="password" name="password" autocomplete="current-password" required>
-            <button type="button" class="password-field__toggle" data-password-toggle aria-label="Show password" aria-pressed="false">
-                <span data-eye-show><?= icon('eye') ?></span>
-                <span data-eye-hide hidden><?= icon('eye-off') ?></span>
-            </button>
-        </div>
+        <?= password_input('password', 'password', 'autocomplete="current-password" required') ?>
     </div>
     <button class="btn btn--primary btn--block" type="submit">Sign in</button>
 </form>

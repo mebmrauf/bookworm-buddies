@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>You're offline - Bookworm Buddies</title>
+    <title>Waking up - Bookworm Buddies</title>
     <style>
         :root { color-scheme: light dark; --paper: #faf7f2; --ink: #221d17; --muted: #655c50; --accent: #a8431a; --on-accent: #fff; }
         @media (prefers-color-scheme: dark) { :root { --paper: #181511; --ink: #f2ece2; --muted: #b5aa9a; --accent: #e08a5f; --on-accent: #1d1209; } }
@@ -15,9 +15,32 @@
 </head>
 <body>
     <main>
-        <h1>You're offline</h1>
-        <p>Bookworm Buddies needs the internet. Check your connection and try again.</p>
-        <a href="/home.php">Try again</a>
+        <h1 data-title>Bookworm Buddies is waking up</h1>
+        <p data-text>We run on a free server that sometimes sleeps or restarts. This usually takes less than a minute, and this page will open by itself once it's ready.</p>
+        <a href="/home.php" data-retry>Try again</a>
     </main>
+    <script>
+        // Only a phone with no internet is told to check its connection. Otherwise the server is the problem, not them.
+        const showState = () => {
+            if (navigator.onLine) return;
+            document.querySelector('[data-title]').textContent = "You're offline";
+            document.querySelector('[data-text]').textContent = 'Check your internet connection. This page will open by itself once you are back online.';
+        };
+        showState();
+        window.addEventListener('offline', showState);
+        document.querySelector('[data-retry]').addEventListener('click', (event) => {
+            event.preventDefault();
+            location.reload();
+        });
+        setInterval(async () => {
+            if (location.pathname === '/offline.html') return;
+            try {
+                const response = await fetch(location.href, { method: 'HEAD', cache: 'no-store' });
+                if (response.ok) location.reload();
+            } catch {
+                // Still not reachable, so keep waiting.
+            }
+        }, 5000);
+    </script>
 </body>
 </html>

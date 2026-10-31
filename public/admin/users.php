@@ -11,7 +11,7 @@ $page = max(1, (int) ($_GET['page'] ?? 1));
 $pattern = like_pattern($q);
 $offset = ($page - 1) * PER_PAGE;
 
-// Deliberately no birth date, mobile number or address: moderation doesn't need them.
+// Deliberately no mobile number or address: moderation doesn't need them.
 $users = run("
     SELECT u.userID, u.username, u.first_name, u.last_name, u.email, u.city, u.area, u.email_verified_at, u.suspended_at, u.suspended_reason,
         (SELECT COUNT(*) FROM collection c WHERE c.userID = u.userID) AS bookCount,

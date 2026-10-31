@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/auth.php';
 
-$user = run("SELECT first_name, last_name, email, pending_email, username, city, area, date_of_birth, gender, mobile, address, avatar_public_id, password FROM users WHERE userID = ?", 'i', $userID)->get_result()->fetch_assoc();
+$user = run("SELECT first_name, last_name, email, pending_email, username, city, area, mobile, address, avatar_public_id, password FROM users WHERE userID = ?", 'i', $userID)->get_result()->fetch_assoc();
 $currentHash = $user['password'];
 $currentEmail = $user['email'];
 $oldAvatar = $user['avatar_public_id'];
@@ -10,7 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf('/settings.php');
     $user = [
         'first_name' => post('first_name'), 'last_name' => post('last_name'), 'username' => post('username'), 'email' => post('email'), 'city' => post('city'), 'area' => post('area'),
-        'date_of_birth' => post('date_of_birth'), 'gender' => post('gender'), 'mobile' => post('mobile'), 'address' => post('address'),
+        'mobile' => post('mobile'), 'address' => post('address'),
     ] + $user;
     $newPassword = post('new_password', false);
     $emailChanged = strcasecmp($user['email'], $currentEmail) !== 0;
@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ?? validate_username($user['username'])
         ?? validate_email($user['email'])
         ?? validate_location($user['city'], $user['area'])
-        ?? validate_details($user['date_of_birth'], $user['gender'], $user['mobile'], $user['address']);
+        ?? validate_details($user['mobile'], $user['address']);
 
     if (!$error && $newPassword !== '') {
         $error = validate_password($newPassword);
@@ -39,9 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $avatar = upload_image_field('avatar', 'avatars') ?? (post('remove_avatar') === '1' ? null : $oldAvatar);
             run(
-                "UPDATE users SET first_name = ?, last_name = ?, username = ?, pending_email = ?, city = ?, area = ?, date_of_birth = ?, gender = ?, mobile = ?, address = ?, password = ?, avatar_public_id = ? WHERE userID = ?",
-                'ssssssssssssi', $user['first_name'], $user['last_name'], $user['username'], $pendingEmail, $optional($user['city']), $optional($user['area']),
-                $optional($user['date_of_birth']), $optional($user['gender']), $optional($user['mobile']), $optional($user['address']), $hash, $avatar, $userID
+                "UPDATE users SET first_name = ?, last_name = ?, username = ?, pending_email = ?, city = ?, area = ?, mobile = ?, address = ?, password = ?, avatar_public_id = ? WHERE userID = ?",
+                'ssssssssssi', $user['first_name'], $user['last_name'], $user['username'], $pendingEmail, $optional($user['city']), $optional($user['area']),
+                $optional($user['mobile']), $optional($user['address']), $hash, $avatar, $userID
             );
             // Browse filters on this copy of the city, so it doesn't have to look up every owner.
             run("UPDATE collection SET city = ? WHERE userID = ?", 'si', $optional($user['city']), $userID);
@@ -138,21 +138,6 @@ include __DIR__ . '/../templates/top.php';
         <fieldset class="panel">
             <legend>Personal details</legend>
             <p class="help">All optional, and other members can't see them. Your delivery address is the one exception: it goes to a book's owner only when they accept your courier request.</p>
-            <div class="form__row">
-                <div class="field">
-                    <label for="date_of_birth">Date of birth</label>
-                    <input id="date_of_birth" type="date" name="date_of_birth" autocomplete="bday" value="<?= e($user['date_of_birth']) ?>">
-                </div>
-                <div class="field">
-                    <label for="gender">Gender</label>
-                    <select id="gender" name="gender">
-                        <option value="">Not set</option>
-                        <?php foreach (GENDERS as $option): ?>
-                            <option value="<?= e($option) ?>"<?= $user['gender'] === $option ? ' selected' : '' ?>><?= e($option) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </div>
             <div class="field">
                 <label for="mobile">Mobile number</label>
                 <input id="mobile" type="tel" name="mobile" maxlength="20" autocomplete="tel" value="<?= e($user['mobile']) ?>">
@@ -168,11 +153,11 @@ include __DIR__ . '/../templates/top.php';
             <p class="help">Your current password is only needed to change your email or password.</p>
             <div class="field">
                 <label for="current_password">Current password</label>
-                <input id="current_password" type="password" name="current_password" autocomplete="current-password">
+                <?= password_input('current_password', 'current_password', 'autocomplete="current-password"') ?>
             </div>
             <div class="field">
                 <label for="new_password">New password (optional)</label>
-                <input id="new_password" type="password" name="new_password" minlength="8" maxlength="72" autocomplete="new-password">
+                <?= password_input('new_password', 'new_password', 'minlength="8" maxlength="72" autocomplete="new-password"') ?>
             </div>
         </fieldset>
 
@@ -189,7 +174,7 @@ include __DIR__ . '/../templates/top.php';
             <?= csrf_field() ?>
             <div class="field">
                 <label for="delete_password">Your password</label>
-                <input id="delete_password" type="password" name="password" autocomplete="current-password" required>
+                <?= password_input('delete_password', 'password', 'autocomplete="current-password" required') ?>
             </div>
             <button type="submit" class="btn btn--danger">Delete my account</button>
         </form>

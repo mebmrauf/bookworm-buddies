@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../src/bootstrap.php';
 
 $postID = (int) ($_GET['id'] ?? 0);
+// The blog opens posts in a popup, which only needs the article itself. The full page stays for shared links.
+$inPopup = isset($_GET['popup']);
 
 $post = run("
     SELECT p.*, u.username, u.first_name, u.last_name, u.avatar_public_id, u.suspended_at,
@@ -41,10 +43,18 @@ $copies = run("
 $pageTitle = $post['title'];
 $pageDescription = $post['excerpt'];
 $navActive = 'blog';
-include __DIR__ . '/../templates/top.php';
+$cover = cloudinary_enabled() ? (post_covers([$post])[mb_strtolower($post['book_title'])] ?? null) : null;
+if (!$inPopup) {
+    include __DIR__ . '/../templates/top.php';
+}
 ?>
 <article class="post">
-    <p><a class="link" href="/blog.php">Back to blog</a></p>
+    <?php if (!$inPopup): ?>
+        <p><a class="link" href="/blog.php">Back to blog</a></p>
+    <?php endif; ?>
+    <?php if ($cover && !$post['image_public_id']): ?>
+        <img class="post__cover" src="<?= e(image_url($cover, 280, 420)) ?>" width="280" height="420" alt="Cover of <?= e($post['book_title']) ?>" decoding="async">
+    <?php endif; ?>
     <h1><?= e($post['title']) ?></h1>
     <p class="post__book">On <strong><?= e($post['book_title']) ?></strong> by <?= e($post['book_author']) ?></p>
     <div class="post__meta">
@@ -90,4 +100,8 @@ include __DIR__ . '/../templates/top.php';
         <?php endif; ?>
     </div>
 </article>
-<?php include __DIR__ . '/../templates/bottom.php'; ?>
+<?php
+if (!$inPopup) {
+    include __DIR__ . '/../templates/bottom.php';
+}
+

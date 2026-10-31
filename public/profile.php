@@ -15,7 +15,7 @@ if ($isOwn) {
 }
 
 $user = run("
-    SELECT first_name, last_name, email, date_of_birth, gender, mobile, address, username, avatar_public_id, city, area,
+    SELECT first_name, last_name, email, mobile, address, username, avatar_public_id, city, area,
         (SELECT AVG(stars) FROM ratings WHERE ratedID = users.userID) AS ratingAverage,
         (SELECT COUNT(*) FROM ratings WHERE ratedID = users.userID) AS ratingCount
     FROM users WHERE userID = ? AND (suspended_at IS NULL OR userID = ?)
@@ -77,7 +77,7 @@ include __DIR__ . '/../templates/top.php';
             <?php endif; ?>
             <?php if ($isOwn): ?>
                 <p class="muted"><?= e($user['email']) ?></p>
-                <?php $details = array_filter([$user['date_of_birth'] ? 'Born ' . $user['date_of_birth'] : null, $user['gender'], $user['mobile'], $user['address']]); ?>
+                <?php $details = array_filter([$user['mobile'], $user['address']]); ?>
                 <?php if ($details): ?>
                     <p class="muted"><?= e(implode(' · ', $details)) ?></p>
                 <?php endif; ?>

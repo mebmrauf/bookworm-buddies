@@ -5,7 +5,8 @@ if ($userID) {
     go('/home.php');
 }
 
-const HERO_COVERS = 4;
+// Chosen by hand because they look good together: Atomic Habits, Clean Code, The Pragmatic Programmer, Becoming.
+const HERO_BOOKS = [42, 41, 40, 38];
 
 // Looks through a fixed window of the newest books, so the home page costs the same at any size.
 $books = run("
@@ -15,16 +16,30 @@ $books = run("
     STRAIGHT_JOIN users u ON c.userID = u.userID
     WHERE u.suspended_at IS NULL AND b.cover_public_id IS NOT NULL
     ORDER BY c.bookID DESC
-    LIMIT 12
+    LIMIT 16
 ")->get_result()->fetch_all(MYSQLI_ASSOC);
 
+// Any of them that's been removed or hidden is replaced by a recent book, so the fan stays full.
+$heroBooks = run("
+    SELECT b.bookID, b.title, b.cover_public_id
+    FROM collection c
+    JOIN books b ON c.bookID = b.bookID
+    JOIN users u ON c.userID = u.userID
+    WHERE b.bookID IN (" . implode(',', HERO_BOOKS) . ") AND b.cover_public_id IS NOT NULL AND " . VISIBLE_BOOK . "
+    ORDER BY FIELD(b.bookID, " . implode(',', HERO_BOOKS) . ")
+")->get_result()->fetch_all(MYSQLI_ASSOC);
+$heroBooks = array_slice(array_values(array_column($heroBooks, null, 'bookID') + array_column($books, null, 'bookID')), 0, count(HERO_BOOKS));
+
 $posts = run("
-    SELECT p.postID, p.title, p.book_title, p.excerpt, u.username
+    SELECT p.postID, p.title, p.book_title, p.excerpt, p.image_public_id, p.created_at, u.userID, u.username
     FROM posts p STRAIGHT_JOIN users u ON p.userID = u.userID
     WHERE p.removed_at IS NULL AND u.suspended_at IS NULL
     ORDER BY p.postID DESC
     LIMIT 3
 ")->get_result()->fetch_all(MYSQLI_ASSOC);
+
+$covers = post_covers($posts);
+$headingTag = 'h3';
 
 $pageTitle = 'Bookworm Buddies';
 $pageDescription = 'Bookworm Buddies is a free community for lending books. Browse shared books, borrow what you want to read and lend what you have finished.';
@@ -43,7 +58,7 @@ include __DIR__ . '/../templates/top.php';
         </div>
         <?php if (cloudinary_enabled()): ?>
             <div class="hero__fan">
-                <?php foreach (array_slice($books, 0, HERO_COVERS) as $book): ?>
+                <?php foreach ($heroBooks as $book): ?>
                     <?php // The fan is hidden on phones, and this stops them downloading covers they'd never show. ?>
                     <a href="/book.php?id=<?= (int) $book['bookID'] ?>"><picture><source media="(min-width: 960px)" srcset="<?= e(image_url($book['cover_public_id'], 440, 660)) ?>"><img width="440" height="660" alt="Cover of <?= e($book['title']) ?>"></picture></a>
                 <?php endforeach; ?>
@@ -74,12 +89,7 @@ include __DIR__ . '/../templates/top.php';
     </div>
     <div class="post-grid">
         <?php foreach ($posts as $post): ?>
-            <article class="post-card">
-                <h3><a href="/post.php?id=<?= (int) $post['postID'] ?>"><?= e($post['title']) ?></a></h3>
-                <p class="muted">On <?= e($post['book_title']) ?> · by <?= e($post['username']) ?></p>
-                <p><?= e($post['excerpt']) ?></p>
-                <a class="link post-card__more" href="/post.php?id=<?= (int) $post['postID'] ?>" aria-label="Read the full post: <?= e($post['title']) ?>">Read the full post</a>
-            </article>
+            <?php include __DIR__ . '/../templates/post-card.php'; ?>
         <?php endforeach; ?>
     </div>
 </section>

@@ -67,6 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $pageTitle = 'Create account';
+$authHeadline = 'Some stories are too good <em>to stay on one shelf.</em>';
+$authText = "Lend what you've finished, borrow what you haven't, and meet readers near you. It's free, and it only takes a minute.";
 include __DIR__ . '/../templates/auth-top.php';
 ?>
 <h1>Create your account</h1>
@@ -85,7 +87,7 @@ include __DIR__ . '/../templates/auth-top.php';
     </div>
     <div class="field">
         <label for="password">Password</label>
-        <input id="password" type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="password-help" required>
+        <?= password_input('password', 'password', 'minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="password-help" required') ?>
         <p class="help" id="password-help">At least 8 characters.</p>
     </div>
     <label class="check"><input type="checkbox" name="agree" value="1"<?= post('agree') === '1' ? ' checked' : '' ?> required> <span>I agree to the <a class="link" href="/rules.php" target="_blank" rel="noopener">community rules and policies</a></span></label>

@@ -75,6 +75,13 @@ function current_password_ok($given, $hash) {
     return !rate_limited("password:user:$userID", 10, 900) && password_verify($given, $hash);
 }
 
+// Wrong passwords are counted per account from one connection, and per account overall. Hashed to fit, and to
+// keep what people typed as a login out of the table.
+function signin_limit_keys($login, $ip) {
+    $login = md5(strtolower($login));
+    return ['pair' => "signin:pair:$login:" . md5($ip), 'account' => "signin:account:$login"];
+}
+
 function password_session_check($hash) {
     return hash('sha256', $hash);
 }
