@@ -1,6 +1,6 @@
 config.php
 ca.pem
-demo-accounts.php
+demo-accounts.txt
 .DS_Store
 .claude/
 .vscode/

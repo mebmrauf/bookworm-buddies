@@ -1,11 +1,11 @@
 <?php
 // Fills an empty database with demo content: php tools/seed.php
 // People are fictional. Emails use example.com, a domain reserved so mail never reaches anyone.
-// Random passwords are written to demo-accounts.php, which git ignores.
+// Random passwords are written to demo-accounts.txt, which git ignores.
 if (PHP_SAPI !== 'cli') {
     exit;
 }
-require __DIR__ . '/../dbconnect.php';
+require __DIR__ . '/../src/db.php';
 
 if ($conn->query("SELECT COUNT(*) FROM users")->fetch_row()[0] > 0) {
     exit("The database already has users. Nothing was changed.\n");
@@ -170,7 +170,7 @@ foreach ($feedback as [$title, $person, $comment, $reply]) {
 
 $conn->commit();
 
-// A .php file that exits at once, so the passwords can't be downloaded from the website.
-file_put_contents(__DIR__ . '/../demo-accounts.php', "<?php exit; ?>\nusername  password  (name)\n" . implode("\n", $accounts) . "\n");
+// Outside public/, so the passwords can't be downloaded from the website.
+file_put_contents(__DIR__ . '/../demo-accounts.txt', "username  password  (name)\n" . implode("\n", $accounts) . "\n");
 
 printf("Added %d users, %d books, %d swaps, %d feedback entries.\n", count($people), count($books), count($swaps), count($feedback));
