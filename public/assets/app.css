@@ -1,3 +1,6 @@
+/* Any display rule would otherwise beat the hidden attribute. */
+[hidden] { display: none !important; }
+
 @font-face {
   font-family: Inter;
   src: url("fonts/inter.woff2") format("woff2");
@@ -240,7 +243,6 @@ html.is-loading button[aria-busy="true"] { opacity: 0.7; cursor: progress; }
   box-shadow: var(--shadow);
 }
 
-.search__results[hidden] { display: none; }
 
 .search__group {
   padding: 8px 10px 4px;
@@ -1433,7 +1435,6 @@ textarea { resize: vertical; }
   border-radius: 50%;
 }
 
-.upload__picture > [hidden] { display: none; }
 
 .upload__current,
 .upload__current .cover { width: 100%; }
@@ -1558,9 +1559,25 @@ input.upload__input.upload__input {
 
 .btn--light { background: #fff; color: #221d17; }
 .btn--light:hover { background: #f1ece3; }
-.btn--on-image { background: transparent; border-color: #fff; color: #fff; }
-.btn--on-image:hover { background: rgb(255 255 255 / 15%); }
-.hero__hint { font-size: 0.9rem; }
+.install-sheet {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 50;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 25%);
+}
+.install-sheet h2 { margin: 0 0 4px; font-size: 1.05rem; }
+.install-sheet p { margin: 0; font-size: 0.95rem; }
+.install-sheet__actions { display: flex; gap: 8px; }
+.install-sheet__actions .btn { flex: 1; }
+.hero h1 em { display: block; color: #f6c98f; font-style: italic; }
 .hero .btn--primary { background: #a8431a; color: #fff; }
 .hero .btn--primary:hover { background: #8b3613; }
 
@@ -1667,7 +1684,6 @@ select {
 
 .password-field__toggle:hover { color: var(--ink); }
 .password-field__toggle span { display: grid; }
-.password-field__toggle span[hidden] { display: none; }
 
 /* Sign in and sign up */
 

@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../src/bootstrap.php';
 
+const MAX_REQUESTS_PER_HOUR = 15;
+
 $email = $_SESSION['verify_email'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -10,6 +12,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (validate_email($email)) {
         flash('Please enter a valid email address.', '/verify-email.php');
+    }
+    if (rate_limited('verify:ip:' . $_SERVER['REMOTE_ADDR'], MAX_REQUESTS_PER_HOUR, 3600)) {
+        flash('Too many requests from this connection. Please try again in an hour.', '/verify-email.php');
     }
 
     $user = run("

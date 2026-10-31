@@ -23,9 +23,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$error && $newPassword !== '') {
         $error = validate_password($newPassword);
-        if (!$error && !password_verify(post('current_password', false), $currentHash)) {
-            $error = 'Your current password is incorrect.';
-        }
+    }
+    if (!$error && ($newPassword !== '' || $emailChanged) && !current_password_ok(post('current_password', false), $currentHash)) {
+        $error = 'Your current password is incorrect. It is needed to change your email or password.';
     }
     if (!$error && $emailChanged && run("SELECT 1 FROM users WHERE email = ?", 's', $user['email'])->get_result()->num_rows) {
         $error = 'That email is already used.';
@@ -47,6 +47,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             run("UPDATE collection SET city = ? WHERE userID = ?", 'si', $optional($user['city']), $userID);
             if ($avatar !== $oldAvatar) {
                 delete_images([$oldAvatar]);
+            }
+            if ($newPassword !== '') {
+                // Other devices lose access at their next page, so this one needs its own fresh session.
+                session_regenerate_id(true);
+                $_SESSION['password_check'] = password_session_check($hash);
             }
             if ($emailChanged) {
                 if (send_verification($userID, $user['email'], $user['first_name'])) {
@@ -103,7 +108,7 @@ include __DIR__ . '/../templates/top.php';
             <div class="field">
                 <label for="email">Email</label>
                 <input id="email" type="email" name="email" maxlength="254" autocomplete="email" value="<?= e($user['email']) ?>" aria-describedby="email-help" required>
-                <p class="help" id="email-help">Never shown to other members. If you change it, we'll email a link to confirm the new address.</p>
+                <p class="help" id="email-help">Never shown to other members. To change it, also enter your current password below. We'll email a link to confirm the new address.</p>
                 <?php if ($user['pending_email']): ?>
                     <p class="help">Waiting for you to confirm <?= e($user['pending_email']) ?>.</p>
                 <?php endif; ?>
@@ -159,14 +164,14 @@ include __DIR__ . '/../templates/top.php';
         </fieldset>
 
         <fieldset class="panel">
-            <legend>Change password</legend>
-            <p class="help">Leave these blank to keep your current password.</p>
+            <legend>Password</legend>
+            <p class="help">Your current password is only needed to change your email or password.</p>
             <div class="field">
                 <label for="current_password">Current password</label>
                 <input id="current_password" type="password" name="current_password" autocomplete="current-password">
             </div>
             <div class="field">
-                <label for="new_password">New password</label>
+                <label for="new_password">New password (optional)</label>
                 <input id="new_password" type="password" name="new_password" minlength="8" maxlength="72" autocomplete="new-password">
             </div>
         </fieldset>
@@ -182,6 +187,10 @@ include __DIR__ . '/../templates/top.php';
         <p class="muted">This permanently removes your account, your books and your requests.</p>
         <form action="/actions/account-delete.php" method="post" data-confirm="Delete your account and all your books? This cannot be undone.">
             <?= csrf_field() ?>
+            <div class="field">
+                <label for="delete_password">Your password</label>
+                <input id="delete_password" type="password" name="password" autocomplete="current-password" required>
+            </div>
             <button type="submit" class="btn btn--danger">Delete my account</button>
         </form>
     </section>

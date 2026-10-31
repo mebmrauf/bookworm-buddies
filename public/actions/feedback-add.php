@@ -3,6 +3,10 @@ require_once __DIR__ . '/../../src/auth.php';
 
 require_post('/home.php');
 
+if (rate_limited("feedback:user:$userID", 30, 3600)) {
+    flash('You are posting too quickly. Please try again later.', '/home.php');
+}
+
 $bookID = (int) post('bookID');
 $comment = post('comment');
 

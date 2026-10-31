@@ -23,6 +23,7 @@ include __DIR__ . '/../templates/auth-top.php';
     <div class="field">
         <label for="password">Password</label>
         <input id="password" type="password" name="password" autocomplete="current-password" required>
+        <p class="help"><a class="link" href="/forgot-password.php">Forgot your password?</a></p>
     </div>
     <button class="btn btn--primary btn--block" type="submit">Sign in</button>
 </form>

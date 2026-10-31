@@ -6,6 +6,10 @@ require_post('/home.php');
 $bookID = (int) post('bookID');
 $message = post('message');
 
+if (rate_limited("swap:user:$userID", 30, 86400)) {
+    flash('You have sent a lot of requests today. Please try again tomorrow.', '/home.php');
+}
+
 $book = run("
     SELECT b.title, b.handover, b.listing_type, u.userID, u.email, u.first_name
     FROM collection c JOIN books b ON c.bookID = b.bookID JOIN users u ON c.userID = u.userID
