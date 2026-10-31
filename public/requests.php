@@ -5,8 +5,10 @@ $rows = run("
     SELECT s.swapID, s.status, s.kind, s.handover, s.message, s.ownerID, s.requesterID, s.due_date, s.owner_confirmed, s.requester_confirmed,
         s.offered_bookID, offered.title AS offeredTitle, b.bookID, b.title, b.author, b.cover_public_id,
         (SELECT rt.stars FROM ratings rt WHERE rt.swapID = s.swapID AND rt.raterID = ?) AS myStars,
-        r.username AS requester, r.email AS requesterEmail, r.mobile AS requesterMobile, r.address AS requesterAddress, r.city AS requesterCity, r.area AS requesterArea,
-        o.username AS owner, o.email AS ownerEmail, o.mobile AS ownerMobile, o.city AS ownerCity, o.area AS ownerArea
+        (SELECT COUNT(*) FROM messages m WHERE m.swapID = s.swapID) AS messageCount,
+        (SELECT COUNT(*) FROM messages m WHERE m.swapID = s.swapID AND m.read_at IS NULL AND m.senderID != ?) AS unread,
+        r.username AS requester, r.address AS requesterAddress, r.city AS requesterCity, r.area AS requesterArea,
+        o.username AS owner, o.city AS ownerCity, o.area AS ownerArea
     FROM swap s
     JOIN books b ON s.bookID = b.bookID
     JOIN users r ON s.requesterID = r.userID
@@ -14,7 +16,7 @@ $rows = run("
     LEFT JOIN books offered ON s.offered_bookID = offered.bookID
     WHERE s.ownerID = ? OR s.requesterID = ?
     ORDER BY s.status = 'pending' DESC, s.status = 'accepted' DESC, s.swapID DESC
-", 'iii', $userID, $userID, $userID)->get_result()->fetch_all(MYSQLI_ASSOC);
+", 'iiii', $userID, $userID, $userID, $userID)->get_result()->fetch_all(MYSQLI_ASSOC);
 
 $incoming = array_filter($rows, fn($row) => $row['ownerID'] == $userID);
 $outgoing = array_filter($rows, fn($row) => $row['requesterID'] == $userID);
@@ -37,7 +39,7 @@ function rating_form($swapID, $otherName) {
             <fieldset class="star-choice">
                 <legend>How did it go?</legend>
                 <?php for ($stars = 1; $stars <= 5; $stars++): ?>
-                    <label><input type="radio" name="stars" value="<?= $stars ?>" required> <?= $stars ?> ★</label>
+                    <label><input class="visually-hidden" type="radio" name="stars" value="<?= $stars ?>" required><span aria-hidden="true">★</span><span class="visually-hidden"><?= $stars ?> out of 5 stars</span></label>
                 <?php endfor; ?>
             </fieldset>
             <div class="field">
@@ -93,22 +95,20 @@ function swap_card($swap, $isOwner) {
             <?php endif; ?>
 
             <?php if ($status === 'accepted'): ?>
-                <!-- Contact details are shared only while a swap is accepted. A home address is shared only when a courier needs it. -->
+                <!-- People arrange the handover in chat. A home address is shared only when a courier needs it. -->
                 <div class="contact">
-                    <h4><?= $isOwner ? 'Contact the borrower' : 'Contact the owner' ?></h4>
-                    <a class="link" href="mailto:<?= e($swap[$other . 'Email']) ?>"><?= e($swap[$other . 'Email']) ?></a>
-                    <?php if ($swap[$other . 'Mobile']): ?>
-                        <a class="link" href="tel:<?= e(preg_replace('/[^0-9+]/', '', $swap[$other . 'Mobile'])) ?>"><?= e($swap[$other . 'Mobile']) ?></a>
-                    <?php endif; ?>
+                    <a class="btn btn--primary" href="/chat.php?swap=<?= (int) $swap['swapID'] ?>">Open chat<?php if ($swap['unread'] > 0): ?> <span class="badge" aria-label="<?= (int) $swap['unread'] ?> new"><?= (int) $swap['unread'] ?></span><?php endif; ?></a>
                     <?php if ($isOwner && $isCourier): ?>
-                        <p><b>Send to:</b> <?= e($swap['requesterAddress'] ?: 'They have not added an address yet. Please ask them for it.') ?></p>
+                        <p><b>Send to:</b> <?= e($swap['requesterAddress'] ?: 'They have not added an address yet. Please ask them for it in chat.') ?></p>
                         <p class="help">The borrower pays the courier. Agree on the cost before you send the book.</p>
                     <?php elseif ($isCourier): ?>
-                        <p class="help">The owner can see your delivery address. You pay the courier, so agree on the cost before they send it.</p>
+                        <p class="help">The owner can see your delivery address. You pay the courier, so agree on the cost in chat before they send it.</p>
                     <?php else: ?>
-                        <p class="help">Stay safe: meet in a public place like a campus, library or café, and tell a friend where you're going.</p>
+                        <p class="help">Agree on the place and time in chat. Stay safe: meet in a public place like a campus, library or café, and tell a friend where you're going.</p>
                     <?php endif; ?>
                 </div>
+            <?php elseif ($swap['messageCount'] > 0): ?>
+                <p><a class="link" href="/chat.php?swap=<?= (int) $swap['swapID'] ?>">View past messages<?= $swap['unread'] > 0 ? ' (' . (int) $swap['unread'] . ' new)' : '' ?></a></p>
             <?php endif; ?>
 
             <div class="actions">
@@ -119,7 +119,7 @@ function swap_card($swap, $isOwner) {
                         <?= swap_button($swap['swapID'], 'accept', 'Accept') ?>
                     <?php endif; ?>
                     <?= swap_button($swap['swapID'], 'decline', 'Decline', 'btn--ghost') ?>
-                    <p class="help">Accepting shares your contact details with them<?= $isCourier ? ', and shows you their delivery address' : '' ?>.</p>
+                    <p class="help">Accepting opens a private chat with them<?= $isCourier ? ', and shows you their delivery address' : '' ?>.</p>
                 <?php elseif ($status === 'pending'): ?>
                     <?= swap_button($swap['swapID'], 'cancel', 'Cancel request', 'btn--ghost') ?>
                     <p class="help">Waiting for the owner. We'll email you when they answer.</p>

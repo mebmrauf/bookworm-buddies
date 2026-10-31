@@ -62,7 +62,7 @@ switch ($action) {
         }
         run("UPDATE swap SET status = 'accepted', due_date = ? WHERE swapID = ? AND status = 'pending'", 'si', $due, $swapID);
         $when = $due ? ' Please return it by ' . date('j F Y', strtotime($due)) . '.' : '';
-        notify($swap['requesterEmail'], $swap['requesterName'], "Accepted: $title", "Good news! Your request for $title was accepted.$when Open your requests to see how to contact the owner.");
+        notify($swap['requesterEmail'], $swap['requesterName'], "Accepted: $title", "Good news! Your request for $title was accepted.$when Open your requests to chat with the owner and arrange the handover.");
         break;
 
     case 'extend':

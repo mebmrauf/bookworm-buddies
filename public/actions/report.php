@@ -13,9 +13,17 @@ $lookups = [
     'user' => "SELECT 1 FROM users WHERE userID = ?",
     'feedback' => "SELECT 1 FROM feedback WHERE feedbackID = ?",
     'rating' => "SELECT 1 FROM ratings WHERE ratingID = ?",
+    'message' => "SELECT 1 FROM messages WHERE messageID = ?",
 ];
 if (!isset($lookups[$type]) || !in_array($reason, REPORT_REASONS, true) || mb_strlen($details) > 500 || !run($lookups[$type], 'i', $id)->get_result()->num_rows) {
     flash('That report could not be sent.', '/home.php');
+}
+// A chat is private, so only someone in it can report one of its messages.
+if ($type === 'message' && !run("
+    SELECT 1 FROM messages m JOIN swap s ON m.swapID = s.swapID
+    WHERE m.messageID = ? AND m.senderID != ? AND (s.ownerID = ? OR s.requesterID = ?)
+", 'iiii', $id, $userID, $userID, $userID)->get_result()->num_rows) {
+    flash('That report could not be sent.', '/requests.php');
 }
 if ($type === 'user' && $id === $userID) {
     flash('You cannot report yourself.', '/home.php');

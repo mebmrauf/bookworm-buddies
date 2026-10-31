@@ -16,7 +16,7 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
     <title><?= e($pageTitle) ?> - Bookworm Buddies</title>
     <?php if (isset($pageDescription)): ?><meta name="description" content="<?= e($pageDescription) ?>"><?php endif; ?>
     <link rel="preload" href="/assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
-    <script type="speculationrules">{"prefetch":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/actions/*"}},{"not":{"href_matches":"/verify*"}}]},"eagerness":"moderate"}]}</script>
+    <script type="speculationrules">{"prefetch":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/actions/*"}},{"not":{"href_matches":"/verify*"}},{"not":{"href_matches":"/chat*"}}]},"eagerness":"moderate"}]}</script>
     <link rel="stylesheet" href="<?= asset('app.css') ?>">
     <script src="<?= asset('app.js') ?>" defer></script>
 </head>
@@ -41,7 +41,6 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
                     <a class="nav__add" href="/add-book.php"<?= $current('add') ?>><?= icon('plus') ?><span>Add book</span></a>
                 <?php else: ?>
                     <a href="/signin.php"><?= icon('login') ?><span>Sign in</span></a>
-                    <a class="nav__add" href="/signup.php"><?= icon('plus') ?><span>Join free</span></a>
                 <?php endif; ?>
             </nav>
             <?php if ($me): ?>
@@ -50,6 +49,7 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
                     <div class="menu__panel">
                         <p class="menu__name"><?= e($me['first_name'] . ' ' . $me['last_name']) ?></p>
                         <a href="/settings.php"><?= icon('settings') ?>Settings</a>
+                        <a href="/about.php"><?= icon('compass') ?>About</a>
                         <a href="/rules.php"><?= icon('book') ?>Rules and policies</a>
                         <button type="button" data-install hidden><?= icon('plus') ?>Install app</button>
                         <form action="/actions/logout.php" method="post">

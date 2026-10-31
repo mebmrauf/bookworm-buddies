@@ -25,6 +25,7 @@ include __DIR__ . '/../templates/top.php';
         <p class="hero__lead">Borrow books from other readers, and lend the ones you've finished. It's free, and you can look around without an account.</p>
         <div class="actions">
             <a class="btn btn--primary btn--large" href="/home.php">Browse books</a>
+            <a class="btn btn--light btn--large" href="/signup.php">Join free</a>
             <button type="button" class="btn btn--on-image btn--large" data-install hidden>Install app</button>
         </div>
         <p class="hero__hint" data-ios-hint hidden>To install on iPhone: tap the Share button in Safari, then "Add to Home Screen".</p>
@@ -59,7 +60,7 @@ include __DIR__ . '/../templates/top.php';
             </li>
             <li>
                 <h3>Hand over and read</h3>
-                <p class="muted">Once accepted, you can contact each other. Meet somewhere public, or use a courier if you live far apart. Then rate each other, so the community knows who to trust.</p>
+                <p class="muted">Once accepted, you get a private chat to arrange it. Meet somewhere public, or use a courier if you live far apart. Then rate each other, so the community knows who to trust.</p>
             </li>
         </ol>
     </div>
@@ -69,6 +70,6 @@ include __DIR__ . '/../templates/top.php';
     <h2>Got books gathering dust?</h2>
     <p class="muted">Put them on your shelf and let someone else enjoy them.</p>
     <a class="btn btn--primary btn--large" href="/signup.php">Create a free account</a>
-    <a class="link" href="/rules.php">Rules and policies</a>
+    <p class="landing__links"><a class="link" href="/about.php">About</a> &middot; <a class="link" href="/rules.php">Rules and policies</a></p>
 </section>
 <?php include __DIR__ . '/../templates/bottom.php'; ?>

@@ -41,8 +41,8 @@ include __DIR__ . '/../templates/top.php';
     </ul>
     <h3>Respect people</h3>
     <ul>
-        <li>No harassment, threats, hate speech or sexual content, anywhere on the site or when contacting someone you met here.</li>
-        <li>Only use someone's contact details to arrange your exchange. Don't share them or contact them for anything else.</li>
+        <li>No harassment, threats, hate speech or sexual content, in chat, anywhere on the site, or when contacting someone you met here.</li>
+        <li>Use chat to arrange your exchange, not for anything unrelated. If someone shares their details with you, keep them private and only use them for the exchange.</li>
     </ul>
     <h3>Keep it about books</h3>
     <ul>
@@ -54,14 +54,14 @@ include __DIR__ . '/../templates/top.php';
 
     <h2 id="enforcement">Suspensions and removed content</h2>
     <h3>How problems reach us</h3>
-    <p>Signed-in members can use the Report link on any book, profile, comment or rating. A person reviews each report. Your report isn't shown to the member you reported. Please don't report people falsely or to get back at them, because that breaks these rules too.</p>
+    <p>Signed-in members can use the Report link on any book, profile, comment or rating, and on messages sent to them in chat. A person reviews each report. Your report isn't shown to the member you reported. Please don't report people falsely or to get back at them, because that breaks these rules too.</p>
 
     <h3>What we can remove</h3>
     <p>For a smaller or first-time problem, we may only remove the content involved:</p>
     <ul>
         <li><strong>A cover photo:</strong> the book stays listed, and we email the owner the reason.</li>
         <li><strong>A book:</strong> it's hidden from everyone but its owner, who can't share it again unless we restore it. Any request still waiting on it is closed, and we email the owner the reason.</li>
-        <li><strong>A comment or rating:</strong> it's deleted, and this may happen without notice.</li>
+        <li><strong>A comment, rating or reported chat message:</strong> it's deleted, and this may happen without notice.</li>
     </ul>
 
     <h3>What can get you suspended</h3>
@@ -69,7 +69,7 @@ include __DIR__ . '/../templates/top.php';
     <ul>
         <li>Threats, harassment, hate speech or sexual content</li>
         <li>Fraud, including taking books with no intention of returning or exchanging them</li>
-        <li>Misusing someone's contact details</li>
+        <li>Abusing chat, or misusing details someone shared with you</li>
         <li>Listing illegal items</li>
         <li>Hacking, or attempting to get into other people's accounts or data</li>
         <li>Coming back with a new account while suspended</li>
@@ -103,6 +103,8 @@ include __DIR__ . '/../templates/top.php';
         <li><strong>Two-way swaps:</strong> each book moves to its new owner once you've both confirmed the exchange.</li>
         <li><strong>Courier:</strong> the person receiving the book pays. Agree on the cost and the courier before anything is sent.</li>
     </ul>
+    <h3>Chat</h3>
+    <p>Accepting a request opens a private chat for the two of you to agree on the details. You can read it after the exchange ends, but no longer send messages. New messages can take a few seconds to appear. We may email you when you have an unread message. You don't have to share your phone number or address in chat, and it's safest not to until you're comfortable.</p>
     <h3>Stay safe</h3>
     <ul>
         <li>Meet in a busy public place like a campus, library or café, and tell someone where you're going.</li>
@@ -118,17 +120,17 @@ include __DIR__ . '/../templates/top.php';
     <ul>
         <li><strong>Anyone, even without an account:</strong> your name, username, city, area, shared books, comments, and any ratings you've given or received. Your profile photo too, if you add one.</li>
         <li><strong>The owner of a book you request:</strong> your note, your chosen handover method and the books you offer.</li>
-        <li><strong>The other person, only while a swap is accepted:</strong> your email address and mobile number, if you've added one.</li>
+        <li><strong>The other person in a chat:</strong> what you write there, and anything you choose to share. We don't share your email address or mobile number with other members.</li>
         <li><strong>A book's owner, only for an accepted courier request:</strong> the delivery address of the person receiving it. It's never shared for meet-ups, and an owner's address is never shared.</li>
-        <li><strong>Only you:</strong> your date of birth and gender, on your own pages.</li>
-        <li><strong>The admin:</strong> in the admin area, your name, username, email address, city and area, books, ratings, comments and reports, to run and moderate the site. Whoever runs the site can also technically reach everything in the database, but only uses it when needed to keep the site working or deal with a problem.</li>
+        <li><strong>Only you:</strong> your date of birth, gender and mobile number, on your own pages.</li>
+        <li><strong>The admin:</strong> in the admin area, your name, username, email address, city and area, books, ratings, comments and reports, to run and moderate the site. The admin area doesn't let the admin browse chats, and only shows a chat message if someone in that chat reports it. Whoever runs the site can also technically reach everything in the database, including messages, but only uses it when needed to keep the site working or deal with a problem. Chats aren't end-to-end encrypted.</li>
     </ul>
     <p>Your password is stored only as a one-way scrambled hash, so nobody can read it.</p>
 
     <h3>What we use it for</h3>
     <ul>
         <li>Running your account and exchanges, and showing other members what's described above</li>
-        <li>Sending you email about your account, requests, return dates and any moderation</li>
+        <li>Sending you email about your account, requests, new messages, return dates and any moderation</li>
         <li>Keeping the site safe, including limiting failed sign-ins using your IP address</li>
     </ul>
     <p>We don't sell your information or show ads. We don't use tracking or analytics cookies. The only cookie is the one that keeps you signed in.</p>
@@ -145,7 +147,7 @@ include __DIR__ . '/../templates/top.php';
     <h3>Your choices</h3>
     <ul>
         <li>You can change your details, or leave the optional ones blank, in Settings.</li>
-        <li>You can delete your account in Settings. This removes your profile, your books and their photos, your requests, your comments, and ratings given by or about you. Books that already moved to someone else stay with them.</li>
+        <li>You can delete your account in Settings. This removes your profile, your books and their photos, your requests and their chats, your comments, and ratings given by or about you. Books that already moved to someone else stay with them.</li>
         <li>Some information can remain for a while afterwards, such as in database backups, the admin action log and reports. A suspended account is kept so the suspension can be reviewed or enforced.</li>
     </ul>
 

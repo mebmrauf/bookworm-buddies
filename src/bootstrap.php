@@ -47,7 +47,9 @@ function current_user() {
     if ($user === false) {
         $user = !$userID ? null : run("
             SELECT first_name, last_name, avatar_public_id, city, address,
-                (SELECT COUNT(*) FROM swap WHERE ownerID = users.userID AND status = 'pending') AS pending
+                (SELECT COUNT(*) FROM swap WHERE ownerID = users.userID AND status = 'pending')
+                    + (SELECT COUNT(*) FROM messages m JOIN swap s ON m.swapID = s.swapID
+                       WHERE m.read_at IS NULL AND m.senderID != users.userID AND (s.ownerID = users.userID OR s.requesterID = users.userID)) AS pending
             FROM users WHERE userID = ? AND suspended_at IS NULL
         ", 'i', $userID)->get_result()->fetch_assoc();
     }

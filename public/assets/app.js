@@ -24,7 +24,7 @@ document.addEventListener('click', (event) => {
 });
 
 // Stop double submits, which matter most while an image uploads.
-document.querySelectorAll('form').forEach((form) => {
+document.querySelectorAll('form:not([data-chat-form])').forEach((form) => {
   form.addEventListener('submit', (event) => {
     if (event.defaultPrevented) return;
     startLoading();
@@ -334,4 +334,140 @@ window.addEventListener('appinstalled', () => {
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 if (isIOS && !isInstalled) {
   document.querySelectorAll('[data-ios-hint]').forEach((hint) => { hint.hidden = false; });
+}
+
+// Chat: checks for new messages every few seconds, only while the chat is on screen.
+const chat = document.querySelector('[data-chat]');
+if (chat) {
+  const POLL_MS = 3000;
+  const IDLE_POLL_MS = 10000;
+  const IDLE_AFTER_MS = 120000;
+  const log = chat.querySelector('[data-chat-log]');
+  const form = chat.querySelector('[data-chat-form]');
+  const status = chat.querySelector('[data-chat-status]');
+  const empty = chat.querySelector('[data-chat-empty]');
+  const swapID = chat.dataset.chat;
+  const reportTemplate = chat.querySelector('[data-report-template]');
+  let lastID = Number(chat.dataset.last) || 0;
+  let lastActivity = Date.now();
+  let timer;
+  let polling = false;
+
+  const isNearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  const scrollDown = () => { log.scrollTop = log.scrollHeight; };
+
+  // A send and a check can return out of order, so messages go in by ID and duplicates are skipped.
+  const addMessage = (message) => {
+    if (log.querySelector(`[data-id="${message.id}"]`)) return;
+    empty?.remove();
+    const bubble = document.createElement('div');
+    bubble.className = `bubble${message.mine ? ' bubble--mine' : ''}`;
+    bubble.dataset.id = message.id;
+    bubble.append(message.body);
+    const meta = document.createElement('div');
+    meta.className = 'bubble__meta';
+    const time = document.createElement('time');
+    time.textContent = message.time;
+    meta.append(time);
+    if (!message.mine && reportTemplate) {
+      const report = reportTemplate.content.cloneNode(true);
+      report.querySelector('input[name="id"]').value = message.id;
+      meta.append(report);
+    }
+    bubble.append(meta);
+    const next = [...log.querySelectorAll('[data-id]')].find((other) => Number(other.dataset.id) > message.id);
+    log.insertBefore(bubble, next || null);
+  };
+
+  const schedule = () => {
+    clearTimeout(timer);
+    if (document.hidden || chat.dataset.open !== '1' && !polling) return;
+    timer = setTimeout(poll, Date.now() - lastActivity > IDLE_AFTER_MS ? IDLE_POLL_MS : POLL_MS);
+  };
+
+  async function poll() {
+    if (polling || document.hidden) return;
+    polling = true;
+    try {
+      const response = await fetch(`/chat-messages.php?swap=${swapID}&after=${lastID}`);
+      if (response.ok) {
+        const data = await response.json();
+        const stick = isNearBottom();
+        if (data.messages.length) {
+          lastActivity = Date.now();
+          data.messages.forEach(addMessage);
+          lastID = Math.max(lastID, ...data.messages.map((message) => message.id));
+          if (stick) scrollDown();
+        }
+        if (!data.open && form) {
+          form.remove();
+          status.textContent = 'This chat has ended, so no more messages can be sent.';
+          chat.dataset.open = '0';
+        }
+      }
+    } catch (error) {
+      // A brief connection problem. The next check picks up where this one stopped.
+    } finally {
+      polling = false;
+      schedule();
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      lastActivity = Date.now();
+      poll();
+    } else {
+      clearTimeout(timer);
+    }
+  });
+
+  scrollDown();
+  poll();
+
+  if (form) {
+    const input = form.querySelector('textarea');
+    const send = form.querySelector('button[type="submit"]');
+    const grow = () => {
+      input.style.height = 'auto';
+      input.style.height = `${input.scrollHeight + 2}px`;
+    };
+    input.addEventListener('input', grow);
+    input.addEventListener('keydown', (event) => {
+      // Enter sends on a computer. Phones keep it as a new line, with the Send button beside it.
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && window.matchMedia('(pointer: fine)').matches) {
+        event.preventDefault();
+        form.requestSubmit();
+      }
+    });
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text || send.disabled) return;
+      send.disabled = true;
+      status.textContent = '';
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+          body: new FormData(form),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          status.textContent = data.error || 'That message could not be sent. Please try again.';
+        } else {
+          input.value = '';
+          grow();
+          lastActivity = Date.now();
+          addMessage(data.message);
+          scrollDown();
+        }
+      } catch (error) {
+        status.textContent = 'That message could not be sent. Check your connection and try again.';
+      } finally {
+        send.disabled = false;
+        input.focus();
+      }
+    });
+  }
 }

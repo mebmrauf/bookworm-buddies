@@ -43,6 +43,14 @@ function report_target($report) {
                 'Rating by <a class="link" href="/profile.php?userID=' . (int) $row['userID'] . '">@' . e($row['username']) . '</a>: ' . (int) $row['stars'] . ' stars "' . e($row['comment']) . '"',
                 admin_action('delete_rating', $id, 'Delete rating', false, 'Delete this rating?') . ($row['suspended_at'] ? '' : admin_action('suspend', $row['userID'], 'Suspend author', true)),
             ];
+        case 'message':
+            // The only way an admin sees a chat message: someone in the chat reported it.
+            $row = run("SELECT m.body, u.userID, u.username, u.suspended_at FROM messages m JOIN users u ON m.senderID = u.userID WHERE m.messageID = ?", 'i', $id)->get_result()->fetch_assoc();
+            if (!$row) break;
+            return [
+                'Chat message by <a class="link" href="/profile.php?userID=' . (int) $row['userID'] . '">@' . e($row['username']) . '</a>: "' . e($row['body']) . '"',
+                admin_action('delete_message', $id, 'Delete message', false, 'Delete this message?') . ($row['suspended_at'] ? '' : admin_action('suspend', $row['userID'], 'Suspend author', true)),
+            ];
     }
     return ['This item has since been removed.', ''];
 }

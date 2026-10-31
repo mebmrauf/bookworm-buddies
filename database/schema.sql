@@ -109,7 +109,7 @@ CREATE TABLE ratings (
 CREATE TABLE reports (
     reportID INT AUTO_INCREMENT PRIMARY KEY,
     reporterID INT NOT NULL,
-    target_type ENUM('book', 'user', 'feedback', 'rating') NOT NULL,
+    target_type ENUM('book', 'user', 'feedback', 'rating', 'message') NOT NULL,
     target_id INT NOT NULL,
     reason VARCHAR(40) NOT NULL,
     details VARCHAR(500),
@@ -128,4 +128,17 @@ CREATE TABLE admin_log (
     target_id INT,
     detail VARCHAR(255),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE messages (
+    messageID INT AUTO_INCREMENT PRIMARY KEY,
+    swapID INT NOT NULL,
+    senderID INT NOT NULL,
+    body VARCHAR(1000) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    read_at DATETIME,
+    INDEX (swapID, messageID),
+    INDEX (senderID, created_at),
+    FOREIGN KEY (swapID) REFERENCES swap(swapID) ON DELETE CASCADE,
+    FOREIGN KEY (senderID) REFERENCES users(userID) ON DELETE CASCADE
 );
