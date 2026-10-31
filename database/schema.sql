@@ -5,8 +5,6 @@ CREATE TABLE users (
     email VARCHAR(254) NOT NULL UNIQUE,
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
-    date_of_birth DATE,
-    gender VARCHAR(30),
     mobile VARCHAR(20),
     address VARCHAR(255),
     city VARCHAR(40),
@@ -92,14 +90,6 @@ CREATE TABLE rate_limits (
     hit_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX lookup (hit_key, hit_at),
     INDEX expiry (hit_at)
-);
-
-CREATE TABLE login_attempts (
-    attemptID INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(254) NOT NULL,
-    ip VARCHAR(45) NOT NULL,
-    attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX (username, ip, attempted_at)
 );
 
 CREATE TABLE ratings (

@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../src/bootstrap.php';
 require_post('/signin.php');
 
 const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECONDS = 900;
 const MAX_ACCOUNT_ATTEMPTS = 20; // From every connection together, so changing IP doesn't allow endless guesses.
 const MAX_IP_ATTEMPTS = 60; // Across accounts, against trying one password on many people. High because mobile networks share IPs.
 // Checked when the account doesn't exist, so response time doesn't reveal which accounts do.
@@ -17,11 +18,8 @@ if ($login === '' || strlen($login) > 254) {
     flash('Invalid email, username or password.', '/signin.php');
 }
 
-run("DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL 15 MINUTE");
-$attempts = run("SELECT COUNT(*) FROM login_attempts WHERE username = ? AND ip = ?", 'ss', $login, $ip)
-    ->get_result()->fetch_row()[0];
-$accountAttempts = run("SELECT COUNT(*) FROM login_attempts WHERE username = ?", 's', $login)->get_result()->fetch_row()[0];
-if ($attempts >= MAX_ATTEMPTS || $accountAttempts >= MAX_ACCOUNT_ATTEMPTS || rate_limited("signin:ip:$ip", MAX_IP_ATTEMPTS, 900)) {
+$limits = signin_limit_keys($login, $ip);
+if (rate_count($limits['pair'], LOCKOUT_SECONDS) >= MAX_ATTEMPTS || rate_count($limits['account'], LOCKOUT_SECONDS) >= MAX_ACCOUNT_ATTEMPTS || rate_limited("signin:ip:$ip", MAX_IP_ATTEMPTS, LOCKOUT_SECONDS)) {
     flash('Too many failed attempts. Please try again in 15 minutes.', '/signin.php');
 }
 
@@ -29,11 +27,12 @@ if ($attempts >= MAX_ATTEMPTS || $accountAttempts >= MAX_ACCOUNT_ATTEMPTS || rat
 $user = run("SELECT userID, email, password, email_verified_at, suspended_at, suspended_reason FROM users WHERE email = ? OR username = ?", 'ss', $login, $login)->get_result()->fetch_assoc();
 
 if (!password_verify($password, $user['password'] ?? DUMMY_HASH) || !$user) {
-    run("INSERT INTO login_attempts (username, ip) VALUES (?, ?)", 'ss', $login, $ip);
+    rate_record($limits['pair']);
+    rate_record($limits['account']);
     flash('Invalid email, username or password.', '/signin.php');
 }
 
-run("DELETE FROM login_attempts WHERE username = ? AND ip = ?", 'ss', $login, $ip);
+rate_clear($limits['pair']);
 
 if (!$user['email_verified_at']) {
     $_SESSION['verify_email'] = $user['email'];

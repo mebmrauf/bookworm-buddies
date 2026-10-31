@@ -10,23 +10,29 @@ $pageTitle = 'Rules and policies';
 $pageDescription = 'The rules for using Bookworm Buddies, what can lead to a suspension, how your information is used, and how to contact us.';
 include __DIR__ . '/../templates/top.php';
 ?>
-<article class="prose">
-    <h1>Community rules and policies</h1>
-    <p class="muted">Last updated <?= POLICIES_UPDATED ?></p>
-    <p>Bookworm Buddies is a free hobby project that helps readers lend, swap and give away physical books. By creating an account, you agree to everything on this page.</p>
+<div class="policy">
+    <header class="policy__head">
+        <p class="page-eyebrow">The small print, in plain words</p>
+        <h1>Community rules and policies</h1>
+        <p class="policy__lead">Be honest. Keep your word. Respect people. <em>Keep it about books.</em></p>
+        <p class="muted">Bookworm Buddies is a free hobby project that helps readers lend, swap and give away physical books. By creating an account, you agree to everything on this page. Last updated <?= POLICIES_UPDATED ?>.</p>
+    </header>
 
-    <nav aria-label="On this page">
-        <ul class="prose__contents">
-            <li><a class="link" href="#rules">Community rules</a></li>
-            <li><a class="link" href="#enforcement">Suspensions and removed content</a></li>
-            <li><a class="link" href="#blog">Blog posts</a></li>
-            <li><a class="link" href="#exchanges">Exchanges and safety</a></li>
-            <li><a class="link" href="#privacy">Your information</a></li>
-            <li><a class="link" href="#copyright">Book covers and copyright</a></li>
-            <li><a class="link" href="#contact">Changes and contact</a></li>
-        </ul>
-    </nav>
+    <div class="policy__layout">
+        <nav class="policy__nav" aria-label="On this page">
+            <p class="policy__nav-title">On this page</p>
+            <ol>
+                <li><a href="#rules">Community rules</a></li>
+                <li><a href="#enforcement">Suspensions and removed content</a></li>
+                <li><a href="#blog">Blog posts</a></li>
+                <li><a href="#exchanges">Exchanges and safety</a></li>
+                <li><a href="#privacy">Your information</a></li>
+                <li><a href="#copyright">Book covers and copyright</a></li>
+                <li><a href="#contact">Changes and contact</a></li>
+            </ol>
+        </nav>
 
+        <article class="prose">
     <h2 id="rules">Community rules</h2>
     <h3>Be honest</h3>
     <ul>
@@ -130,7 +136,7 @@ include __DIR__ . '/../templates/top.php';
         <li><strong>The owner of a book you request:</strong> your note, your chosen handover method and the books you offer.</li>
         <li><strong>The other person in a chat:</strong> what you write there, and anything you choose to share. We don't share your email address or mobile number with other members.</li>
         <li><strong>A book's owner, only for an accepted courier request:</strong> the delivery address of the person receiving it. It's never shared for meet-ups, and an owner's address is never shared.</li>
-        <li><strong>Only you:</strong> your date of birth, gender and mobile number, on your own pages.</li>
+        <li><strong>Only you:</strong> your mobile number, on your own pages.</li>
         <li><strong>The admin:</strong> in the admin area, your name, username, email address, city and area, books, ratings, comments and reports, to run and moderate the site. The admin area doesn't let the admin browse chats, and only shows a chat message if someone in that chat reports it. Whoever runs the site can also technically reach everything in the database, including messages, but only uses it when needed to keep the site working or deal with a problem. Chats aren't end-to-end encrypted.</li>
     </ul>
     <p>Your password is stored only as a one-way scrambled hash, so nobody can read it.</p>
@@ -166,5 +172,7 @@ include __DIR__ . '/../templates/top.php';
     <h2 id="contact">Changes and contact</h2>
     <p>We may update this page as the site changes, and the date at the top shows the latest version. If a change is significant, we'll try to let members know. Continuing to use the site after a change means you accept it.</p>
     <p>For questions, removal requests or anything about your information, contact <?= $contactLink ?>.</p>
-</article>
+        </article>
+    </div>
+</div>
 <?php include __DIR__ . '/../templates/bottom.php'; ?>

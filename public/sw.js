@@ -1,6 +1,6 @@
-// Only provides the offline page. Pages are never stored, because they can hold private details
+// Only provides the page shown when the site can't be reached. Pages are never stored, because they can hold private details
 // that must not outlive a sign-out. Assets already cache in the browser for a year.
-const CACHE = 'bookworm-offline-v1';
+const CACHE = 'bookworm-offline-v3';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
@@ -21,7 +21,9 @@ self.addEventListener('fetch', (event) => {
   if (event.request.mode !== 'navigate') return;
   event.respondWith((async () => {
     try {
-      return (await event.preloadResponse) || (await fetch(event.request));
+      const response = (await event.preloadResponse) || (await fetch(event.request));
+      // The host answers with its own error page while the server restarts, and that says nothing useful.
+      return response.status === 502 || response.status === 503 || response.status === 504 ? await caches.match(OFFLINE_URL) : response;
     } catch (error) {
       return caches.match(OFFLINE_URL);
     }

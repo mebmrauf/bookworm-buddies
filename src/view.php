@@ -8,6 +8,29 @@ function csrf_field() {
 }
 
 // Icons are decorative: every use sits next to visible text or inside a labelled control.
+// A cover for each post's book, in one query. Keys are lower case, because titles match without regard to case.
+function post_covers($posts) {
+    $titles = array_values(array_unique(array_column($posts, 'book_title')));
+    if (!$titles) {
+        return [];
+    }
+    $rows = run(
+        "SELECT title, MIN(cover_public_id) FROM books WHERE title IN (" . implode(',', array_fill(0, count($titles), '?')) . ") AND cover_public_id IS NOT NULL AND removed_at IS NULL GROUP BY title",
+        str_repeat('s', count($titles)), ...$titles
+    )->get_result()->fetch_all();
+    $covers = [];
+    foreach ($rows as [$title, $cover]) {
+        $covers[mb_strtolower($title)] = $cover;
+    }
+    return $covers;
+}
+
+function password_input($id, $name, $attributes) {
+    return '<div class="password-field"><input id="' . $id . '" type="password" name="' . $name . '" ' . $attributes . '>'
+        . '<button type="button" class="password-field__toggle" data-password-toggle aria-label="Show password" aria-pressed="false">'
+        . '<span data-eye-show>' . icon('eye') . '</span><span data-eye-hide hidden>' . icon('eye-off') . '</span></button></div>';
+}
+
 function icon($name) {
     $paths = [
         'search' => '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
@@ -23,6 +46,7 @@ function icon($name) {
         'eye' => '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/>',
         'eye-off' => '<path d="M10.7 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-2.2 3.2"/><path d="M6.6 6.6A18 18 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m2 2 20 20"/>',
         'external' => '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+        'close' => '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
         'download' => '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
         'pen' => '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
         'pin' => '<path d="M20 10c0 5-8 12-8 12s-8-7-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
@@ -38,7 +62,7 @@ function asset($file) {
 
 // A designed placeholder keeps the grid even for books without a photo.
 // $sizes says how wide the cover shows on screen, so a phone doesn't download a desktop-sized image.
-function book_cover($book, $sizes = '(min-width: 960px) 280px, (min-width: 640px) 31vw, 46vw') {
+function book_cover($book, $sizes = '(min-width: 1500px) 170px, (min-width: 1200px) 240px, (min-width: 960px) 280px, (min-width: 640px) 31vw, 46vw') {
     if (!empty($book['cover_public_id']) && cloudinary_enabled()) {
         $srcset = [];
         foreach ([120, 200, 320, 480, 640] as $width) {

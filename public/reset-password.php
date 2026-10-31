@@ -26,7 +26,11 @@ if ($user && $_SERVER['REQUEST_METHOD'] === 'POST') {
         SET password = ?, reset_token_hash = NULL, reset_expires_at = NULL, email_verified_at = COALESCE(email_verified_at, NOW())
         WHERE userID = ?
     ", 'si', password_hash($password, PASSWORD_DEFAULT), $user['userID']);
-    run("DELETE FROM login_attempts WHERE username IN (?, ?)", 'ss', $user['username'], $user['email']);
+    foreach ([$user['username'], $user['email']] as $login) {
+        foreach (signin_limit_keys($login, $_SERVER['REMOTE_ADDR']) as $key) {
+            rate_clear($key);
+        }
+    }
     session_regenerate_id(true);
     unset($_SESSION['user_id'], $_SESSION['password_check']);
     flash('Your password has been changed. You can sign in now.', '/signin.php', 'success');
@@ -43,7 +47,7 @@ include __DIR__ . '/../templates/auth-top.php';
         <input type="hidden" name="token" value="<?= e($token) ?>">
         <div class="field">
             <label for="password">New password</label>
-            <input id="password" type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="password-help" required autofocus>
+            <?= password_input('password', 'password', 'minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="password-help" required autofocus') ?>
             <p class="help" id="password-help">At least 8 characters.</p>
         </div>
         <button class="btn btn--primary btn--block" type="submit">Change password</button>

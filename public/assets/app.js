@@ -1,11 +1,12 @@
 // Ask before destructive actions.
-document.querySelectorAll('form[data-confirm]').forEach((form) => {
+const confirmBeforeSubmit = (form) => {
   form.addEventListener('submit', (event) => {
     if (!confirm(form.dataset.confirm)) {
       event.preventDefault();
     }
   });
-});
+};
+document.querySelectorAll('form[data-confirm]').forEach(confirmBeforeSubmit);
 
 // Filters apply as soon as a choice is made.
 document.querySelectorAll('form[data-autosubmit] select').forEach((select) => {
@@ -24,7 +25,7 @@ document.addEventListener('click', (event) => {
 });
 
 // Stop double submits, which matter most while an image uploads.
-document.querySelectorAll('form:not([data-chat-form])').forEach((form) => {
+const stopDoubleSubmit = (form) => {
   form.addEventListener('submit', (event) => {
     if (event.defaultPrevented) return;
     startLoading();
@@ -35,7 +36,8 @@ document.querySelectorAll('form:not([data-chat-form])').forEach((form) => {
       button.setAttribute('aria-busy', 'true');
     }
   });
-});
+};
+document.querySelectorAll('form:not([data-chat-form])').forEach(stopDoubleSubmit);
 
 // The back button can restore a page exactly as it was left, mid-submit included.
 window.addEventListener('pageshow', () => {
@@ -387,6 +389,70 @@ window.addEventListener('appinstalled', () => {
   closeInstallSheet(false);
   if (installMenuItem) installMenuItem.hidden = true;
 });
+
+// Blog posts open in a popup, with their own address so they can be shared. The links still work without this.
+const postDialog = document.querySelector('[data-post-dialog]');
+if (postDialog && document.querySelector('.post-card')) {
+  const body = postDialog.querySelector('[data-post-dialog-body]');
+  const listTitle = document.title;
+
+  const showPost = async (url) => {
+    body.textContent = 'Loading...';
+    if (!postDialog.open) postDialog.showModal();
+    postDialog.scrollTop = 0;
+    const address = new URL(url, location.origin);
+    address.searchParams.set('popup', '1');
+    try {
+      const response = await fetch(address);
+      if (!response.ok) throw new Error(response.status);
+      body.innerHTML = await response.text();
+    } catch {
+      location.href = url;
+      return;
+    }
+    body.querySelectorAll('form[data-confirm]').forEach(confirmBeforeSubmit);
+    body.querySelectorAll('form').forEach(stopDoubleSubmit);
+    document.title = `${body.querySelector('h1')?.textContent ?? 'Blog'} - Bookworm Buddies`;
+  };
+
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('.post-card a[href^="/post.php"]');
+    if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    history.pushState({ post: link.getAttribute('href') }, '', link.href);
+    showPost(link.getAttribute('href'));
+  }, true);
+
+  const leavePost = () => {
+    if (history.state?.post) {
+      history.back();
+    } else {
+      postDialog.close();
+    }
+  };
+
+  postDialog.querySelector('[data-post-dialog-close]').addEventListener('click', leavePost);
+  // A click on the darkened area outside lands on the dialog itself.
+  postDialog.addEventListener('click', (event) => {
+    if (event.target === postDialog) leavePost();
+  });
+  // Escape closes it directly, so the address needs putting back too.
+  postDialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    leavePost();
+  });
+  postDialog.addEventListener('close', () => {
+    document.title = listTitle;
+  });
+  window.addEventListener('popstate', (event) => {
+    if (event.state?.post) {
+      showPost(event.state.post);
+    } else if (postDialog.open) {
+      postDialog.close();
+    }
+  });
+}
 
 // Chat: checks for new messages every few seconds, only while the chat is on screen.
 const chat = document.querySelector('[data-chat]');

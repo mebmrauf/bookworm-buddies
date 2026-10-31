@@ -1,15 +1,28 @@
 <?php
-// End-to-end checks against a running site: php tools/test.php http://localhost:8000
+// End-to-end checks: php tools/test.php
+// Starts its own copy of the site on the bookworm_test database, so the real site's data is never involved.
 // By default this sends no email and uploads nothing, so it can run freely without using up any service's limits.
 // Add --real-services to also call Resend and Cloudinary for real. That uses quota, so save it for rare final checks.
-// Creates zztest_* accounts and removes them at the end. Existing data is not touched.
 if (PHP_SAPI !== 'cli') {
     exit;
+}
+$realServices = in_array('--real-services', $argv, true);
+$testConfigFile = __DIR__ . '/test-config.php';
+putenv("BOOKWORM_CONFIG=$testConfigFile");
+if ($realServices) {
+    putenv('BOOKWORM_REAL_SERVICES=1');
 }
 require __DIR__ . '/../src/db.php';
 require __DIR__ . '/../src/cloudinary.php';
 
-$base = rtrim($argv[1] ?? 'http://localhost:8000', '/');
+if (!str_ends_with(config('database'), '_test')) {
+    exit("Refusing to run: the tests create and delete data, so they need a database named *_test.\n");
+}
+
+$sitePort = 17000 + random_int(0, 999);
+$base = "http://localhost:$sitePort";
+$site = proc_open([PHP_BINARY, '-d', 'upload_max_filesize=10M', '-d', 'post_max_size=12M', '-S', "localhost:$sitePort", '-t', __DIR__ . '/../public'], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $sitePipes);
+usleep(800000);
 $tag = 'zztest_' . bin2hex(random_bytes(3));
 $failures = 0;
 $checks = 0;
@@ -36,19 +49,18 @@ function db($sql, $types = '', ...$params) {
 $logStart = (int) db("SELECT COALESCE(MAX(logID), 0) FROM admin_log")->fetch_row()[0];
 
 function cleanup() {
-    global $tag, $logStart, $adminServer;
+    global $tag, $logStart, $adminServer, $site;
     if (!empty($adminServer)) {
         proc_terminate($adminServer);
     }
+    proc_terminate($site);
     db("DELETE FROM admin_log WHERE logID > ?", 'i', $logStart);
-    db("DELETE FROM login_attempts WHERE username = 'admin'");
-    db("DELETE FROM rate_limits WHERE hit_key LIKE 'password:user:%' OR hit_key = 'admin-login:all' OR hit_key LIKE '%:ip:%' OR hit_key LIKE 'zztest%'");
+    db("DELETE FROM rate_limits");
     $covers = db("SELECT b.cover_public_id FROM books b JOIN collection c ON b.bookID = c.bookID JOIN users u ON c.userID = u.userID WHERE u.username LIKE CONCAT(?, '%')", 's', $tag)->fetch_all();
     $avatars = db("SELECT avatar_public_id FROM users WHERE username LIKE CONCAT(?, '%')", 's', $tag)->fetch_all();
     delete_images(array_merge(array_column($covers, 0), array_column($avatars, 0)));
     db("DELETE b FROM books b JOIN collection c ON b.bookID = c.bookID JOIN users u ON c.userID = u.userID WHERE u.username LIKE CONCAT(?, '%')", 's', $tag);
     db("DELETE FROM users WHERE username LIKE CONCAT(?, '%') OR email LIKE CONCAT('delivered+', ?, '%')", 'ss', $tag, $tag);
-    db("DELETE FROM login_attempts WHERE username LIKE CONCAT(?, '%') OR username LIKE CONCAT('delivered+', ?, '%')", 'ss', $tag, $tag);
 }
 register_shutdown_function('cleanup');
 
@@ -111,7 +123,6 @@ class Browser {
 }
 
 // example.com addresses never reach Resend. Its test address does, and counts against the sending limit.
-$realServices = in_array('--real-services', $argv, true);
 $realEmail = $realServices;
 function test_email($suffix) {
     global $tag, $realEmail;
@@ -187,9 +198,15 @@ foreach ($manifest['icons'] ?? [] as $icon) {
 check('pwa: icons exist at their stated sizes', $sizes === ['any192', 'any512', 'maskable512']);
 $worker = $anon->get('sw.js');
 check('pwa: the service worker is served, and never stores pages', $anon->code === 200 && str_contains($worker, "cache.add(OFFLINE_URL)") && substr_count($worker, 'cache.add') === 1 && !str_contains($worker, 'cache.put'));
-check('pwa: the offline page exists', str_contains($anon->get('offline.html'), "You're offline") && $anon->code === 200);
+check('pwa: the offline page exists', str_contains($anon->get('offline.html'), "waking up") && $anon->code === 200);
 $home = $anon->get('');
 check('pwa: pages link the manifest and icons', str_contains($home, 'rel="manifest"') && str_contains($home, 'apple-touch-icon') && str_contains($home, 'data-install'));
+
+// The test database starts empty, so guests need one shared book, in a different city from the others.
+db("INSERT INTO users (username, password, email, first_name, last_name, city, area, email_verified_at, rules_accepted_at) VALUES (?, 'x', ?, 'Sample', 'Owner', 'Sylhet', 'Zindabazar', NOW(), NOW())", 'ss', "{$tag}sample", "$tag-sample@example.com");
+$sampleOwner = $conn->insert_id;
+db("INSERT INTO books (title, author, year_published, cover_public_id) VALUES (?, 'Sample Author', 2000, 'sample')", 's', "$tag sample book");
+db("INSERT INTO collection (userID, bookID, showcase, city) VALUES (?, ?, 1, 'Sylhet')", 'ii', $sampleOwner, $conn->insert_id);
 
 // ---- Guests can look around
 $html = $anon->get('');
@@ -242,11 +259,10 @@ check('signup: rejects a blank name', str_contains(signup($alice, 'a', ['name' =
 check('signup: wrong CSRF token refused', str_contains($alice->rawPost('signup.php', ['csrf' => 'bad', 'name' => 'T U', 'email' => test_email('x'), 'password' => 'correct-horse-1']), 'expired') && !db("SELECT 1 FROM users WHERE email = ?", 's', test_email('x'))->num_rows);
 
 $html = signup($alice, 'a', ['name' => "Test O'Brien"], false);
-$row = db("SELECT userID, username, first_name, last_name, password, email_verified_at, verify_sent_at, verify_token_hash, date_of_birth FROM users WHERE email = ?", 's', test_email('a'))->fetch_assoc();
+$row = db("SELECT userID, username, first_name, last_name, password, email_verified_at, verify_sent_at, verify_token_hash FROM users WHERE email = ?", 's', test_email('a'))->fetch_assoc();
 check('signup: goes to the check-your-email page', str_ends_with($alice->url, 'verify-email.php') && str_contains($html, 'Check your email'));
 check('signup: splits the name, apostrophe included', $row['first_name'] === 'Test' && $row['last_name'] === "O'Brien");
 check('signup: a username is generated', (bool) preg_match('/^test\.o\.brien[0-9]*$/', $row['username']));
-check('signup: birth date is left empty', $row['date_of_birth'] === null);
 check('signup: the time of agreeing is recorded', db("SELECT rules_accepted_at FROM users WHERE userID = ?", 'i', $row['userID'])->fetch_row()[0] !== null);
 check('signup: the confirmation email counts as sent', $row['verify_sent_at'] !== null);
 check('signup: the link is stored only as a hash', strlen((string) $row['verify_token_hash']) === 64);
@@ -315,29 +331,30 @@ for ($i = 0; $i < 5; $i++) {
 check('signin: blocked after 5 failures', str_contains(signin($limited, 'q'), 'Too many failed attempts') && !str_ends_with($limited->url, 'home.php'));
 
 // ---- Username and optional details
-$settings = fn($overrides = []) => $overrides + ['current_password' => 'correct-horse-1', 'first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}a", 'date_of_birth' => '', 'gender' => '', 'mobile' => '', 'address' => '', 'new_password' => ''];
+$settings = fn($overrides = []) => $overrides + ['current_password' => 'correct-horse-1', 'first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}a", 'mobile' => '', 'address' => '', 'new_password' => ''];
 check('username: a taken name is refused', str_contains($alice->post('settings.php', $settings(['username' => "{$tag}b"]), 'settings.php'), 'already taken'));
 check('username: uniqueness ignores capitals', str_contains($alice->post('settings.php', $settings(['username' => strtoupper("{$tag}b")]), 'settings.php'), 'already taken'));
 check('username: bad characters are refused', str_contains($alice->post('settings.php', $settings(['username' => "a b'c"]), 'settings.php'), 'Username must be'));
 $alice->post('settings.php', $settings(['username' => "{$tag}renamed"]), 'settings.php');
 check('username: can be changed', db("SELECT username FROM users WHERE email = ?", 's', test_email('a'))->fetch_row()[0] === "{$tag}renamed");
 $alice->post('settings.php', $settings(), 'settings.php');
-$alice->post('settings.php', $settings(['date_of_birth' => '2000-01-15', 'gender' => 'Female', 'mobile' => '+880 1712-345678', 'address' => 'Dhaka']), 'settings.php');
-$details = db("SELECT date_of_birth, gender, mobile, address FROM users WHERE email = ?", 's', test_email('a'))->fetch_assoc();
-check('details: optional fields save', $details === ['date_of_birth' => '2000-01-15', 'gender' => 'Female', 'mobile' => '+880 1712-345678', 'address' => 'Dhaka']);
-foreach ([['date_of_birth' => '2999-01-01', 'date of birth'], ['gender' => 'Dragon', 'gender'], ['mobile' => 'call me', 'mobile number'], ['address' => str_repeat('x', 256), 'Address can be']] as $bad) {
+$alice->post('settings.php', $settings(['mobile' => '+880 1712-345678', 'address' => 'Dhaka']), 'settings.php');
+$details = db("SELECT mobile, address FROM users WHERE email = ?", 's', test_email('a'))->fetch_assoc();
+check('details: optional fields save', $details === ['mobile' => '+880 1712-345678', 'address' => 'Dhaka']);
+foreach ([['mobile' => 'call me', 'mobile number'], ['address' => str_repeat('x', 256), 'Address can be']] as $bad) {
     $needle = $bad[0];
     unset($bad[0]);
     check("details: refuses a bad value ($needle)", str_contains($alice->post('settings.php', $settings($bad), 'settings.php'), $needle));
 }
-$alice->post('settings.php', $settings(['date_of_birth' => '2000-01-15']), 'settings.php');
-check('details: blank fields clear them', db("SELECT gender FROM users WHERE email = ?", 's', test_email('a'))->fetch_row()[0] === null);
+$alice->post('settings.php', $settings(), 'settings.php');
+check('details: blank fields clear them', db("SELECT mobile FROM users WHERE email = ?", 's', test_email('a'))->fetch_row()[0] === null);
+$alice->post('settings.php', $settings(['mobile' => '+880 1712-345678']), 'settings.php');
 $ownProfile = $alice->get('profile.php');
-check('details: the owner sees them', str_contains($ownProfile, '2000-01-15'));
+check('details: the owner sees them', str_contains($ownProfile, '+880 1712-345678'));
 
 // ---- Changing email
 $newEmail = test_email('a2');
-$alice->post('settings.php', $settings(['email' => $newEmail, 'date_of_birth' => '2000-01-15']), 'settings.php');
+$alice->post('settings.php', $settings(['email' => $newEmail]), 'settings.php');
 usleep(600000);
 $emailRow = db("SELECT userID, email, pending_email FROM users WHERE username = ?", 's', "{$tag}a")->fetch_assoc();
 check('email: stays the same until confirmed', $emailRow['email'] === test_email('a') && $emailRow['pending_email'] === $newEmail);
@@ -353,13 +370,13 @@ $aliceID = user_id('a');
 $bobID = user_id('b');
 $carolID = user_id('c');
 $bobBefore = db("SELECT email, password FROM users WHERE userID = ?", 'i', $bobID)->fetch_assoc();
-$alice->post("settings.php?userID=$bobID", ['first_name' => 'Hacked', 'last_name' => 'Hacked', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a", 'new_password' => ''], 'settings.php');
+$alice->post("settings.php?userID=$bobID", ['first_name' => 'Hacked', 'last_name' => 'Hacked', 'email' => test_email('a'), 'username' => "{$tag}a", 'new_password' => ''], 'settings.php');
 check('profile: ?userID= cannot change another account', db("SELECT email, password FROM users WHERE userID = ?", 'i', $bobID)->fetch_assoc() === $bobBefore);
 check('profile: blank password keeps the old one', db("SELECT password FROM users WHERE userID = ?", 'i', $aliceID)->fetch_row()[0] === $hash);
 check('profile: the form never shows the password hash', !str_contains($alice->get('settings.php'), $hash));
-check('profile: duplicate username refused', str_contains($alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}b", 'new_password' => ''], 'settings.php'), 'already taken'));
-check('profile: changing password needs the current one', str_contains($alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a", 'new_password' => 'brand-new-pass-1', 'current_password' => 'wrong'], 'settings.php'), 'current password is incorrect'));
-$alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a", 'new_password' => 'brand-new-pass-1', 'current_password' => 'correct-horse-1'], 'settings.php');
+check('profile: duplicate username refused', str_contains($alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}b", 'new_password' => ''], 'settings.php'), 'already taken'));
+check('profile: changing password needs the current one', str_contains($alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}a", 'new_password' => 'brand-new-pass-1', 'current_password' => 'wrong'], 'settings.php'), 'current password is incorrect'));
+$alice->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}a", 'new_password' => 'brand-new-pass-1', 'current_password' => 'correct-horse-1'], 'settings.php');
 check('profile: password change works', password_verify('brand-new-pass-1', db("SELECT password FROM users WHERE userID = ?", 'i', $aliceID)->fetch_row()[0]));
 
 // ---- Books
@@ -744,7 +761,7 @@ if (cloudinary_enabled() && $realServices) {
     $alice->post('actions/book-delete.php', ['bookID' => $photoBook]);
     check('upload: deleting a book deletes its image', $third && cloudinary_asset($third) === null);
 
-    $profile = ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'date_of_birth' => '2000-01-15', 'username' => "{$tag}a"];
+    $profile = ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}a"];
     $alice->upload('settings.php', $profile, ['avatar' => $red], 'settings.php');
     $avatarID = db("SELECT avatar_public_id FROM users WHERE userID = ?", 'i', $aliceID)->fetch_row()[0];
     check('upload: an avatar goes in the avatars folder', str_starts_with((string) $avatarID, 'bookworm-buddies/avatars/'));
@@ -858,11 +875,22 @@ signin($laptop, 'pw');
 signin($phone, 'pw');
 $phone->get('requests.php');
 check('sessions: a second device is signed in', str_ends_with($phone->url, 'requests.php'));
-$laptop->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('pw'), 'username' => "{$tag}pw", 'date_of_birth' => '', 'gender' => '', 'mobile' => '', 'address' => '', 'current_password' => 'correct-horse-1', 'new_password' => 'correct-horse-2'], 'settings.php');
+$laptop->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('pw'), 'username' => "{$tag}pw", 'mobile' => '', 'address' => '', 'current_password' => 'correct-horse-1', 'new_password' => 'correct-horse-2'], 'settings.php');
 $laptop->get('requests.php');
 check('sessions: the device that changed the password stays signed in', str_ends_with($laptop->url, 'requests.php'));
 $phone->get('requests.php');
 check('sessions: changing the password signs out other devices', str_ends_with($phone->url, 'signin.php'));
+
+// The blog's popup gets the article alone, and shared links still get the whole page.
+$anyPost = db("SELECT p.postID FROM posts p JOIN users u ON p.userID = u.userID WHERE p.removed_at IS NULL AND u.suspended_at IS NULL LIMIT 1")->fetch_row()[0] ?? null;
+if ($anyPost) {
+    $reader = new Browser();
+    $inPopup = $reader->get("post.php?id=$anyPost&popup=1");
+    check('blog popup: returns just the article', str_contains($inPopup, '<article class="post"') && !str_contains($inPopup, '<html'));
+    check('blog popup: a shared link is a full page', str_contains($reader->get("post.php?id=$anyPost"), '<html'));
+}
+check('sign-in text: differs from signup', str_contains($anon->get('signin.php'), 'Your next chapter') && str_contains($anon->get('signup.php'), 'to stay on one shelf'));
+check('password fields: sign-in and signup can show the password', str_contains($anon->get('signin.php'), 'data-password-toggle') && str_contains($anon->get('signup.php'), 'data-password-toggle'));
 
 // Forgotten passwords.
 $forgetful = new Browser();
@@ -914,7 +942,7 @@ $keepLimits = false;
 $guarded = new Browser();
 signup($guarded, 'grd');
 signin($guarded, 'grd');
-$guardedForm = ['first_name' => 'A', 'last_name' => 'B', 'username' => "{$tag}grd", 'email' => "$tag-moved@example.com", 'date_of_birth' => '', 'gender' => '', 'mobile' => '', 'address' => '', 'new_password' => ''];
+$guardedForm = ['first_name' => 'A', 'last_name' => 'B', 'username' => "{$tag}grd", 'email' => "$tag-moved@example.com", 'mobile' => '', 'address' => '', 'new_password' => ''];
 check('email: changing it needs the current password', str_contains($guarded->post('settings.php', $guardedForm + ['current_password' => 'wrong'], 'settings.php'), 'current password is incorrect'));
 check('email: nothing changed without it', db("SELECT pending_email FROM users WHERE userID = ?", 'i', user_id('grd'))->fetch_row()[0] === null);
 $guarded->post('settings.php', $guardedForm + ['current_password' => 'correct-horse-1'], 'settings.php');
@@ -929,7 +957,7 @@ check('password checks: guessing is limited', user_id('grd') !== null);
 $adminPassword = bin2hex(random_bytes(12));
 $cronToken = bin2hex(random_bytes(16));
 $testConfig = tempnam(sys_get_temp_dir(), 'bw') . '.php';
-file_put_contents($testConfig, '<?php return array_merge(require ' . var_export(realpath(__DIR__ . '/../config.php'), true) . ", ['admin' => ['email' => 'admin@example.com', 'password_hash' => " . var_export(password_hash($adminPassword, PASSWORD_BCRYPT), true) . "], 'cron_token' => " . var_export($cronToken, true) . ']);');
+file_put_contents($testConfig, '<?php return array_merge(require ' . var_export($testConfigFile, true) . ", ['admin' => ['email' => 'admin@example.com', 'password_hash' => " . var_export(password_hash($adminPassword, PASSWORD_BCRYPT), true) . "], 'cron_token' => " . var_export($cronToken, true) . ']);');
 $adminPort = 18000 + random_int(0, 999);
 $adminSite = "http://localhost:$adminPort";
 $adminServer = proc_open([PHP_BINARY, '-S', "localhost:$adminPort", '-t', __DIR__ . '/../public'], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes, null, ['BOOKWORM_CONFIG' => $testConfig] + getenv());
@@ -1181,7 +1209,7 @@ for ($i = 0; $i < 5; $i++) {
     $loginAdmin($admin, 'admin@example.com', 'wrong-password');
 }
 check('admin: login is blocked after 5 failures', str_contains($loginAdmin($admin, 'admin@example.com', $adminPassword), 'Too many failed attempts'));
-db("DELETE FROM login_attempts WHERE username = 'admin'");
+db("DELETE FROM rate_limits WHERE hit_key LIKE 'admin-%'");
 
 // ---- Pages render cleanly
 foreach (['home.php', 'home.php?available=1', 'requests.php', 'add-book.php', 'profile.php', 'profile.php?show=showcased', 'profile.php?show=borrowed', 'profile.php?show[]=x', 'profile.php?userID=999999999', 'settings.php', 'search.php', 'search.php?q[]=x'] as $page) {

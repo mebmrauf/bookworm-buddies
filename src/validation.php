@@ -1,7 +1,6 @@
 <?php
 // Each function returns an error message, or null when valid.
 
-const GENDERS = ['Male', 'Female'];
 
 const LISTING_TYPES = ['lend' => 'Lend', 'give' => 'Give away', 'swap' => 'Swap'];
 
@@ -83,16 +82,7 @@ function validate_password($password) {
 }
 
 // All of these are optional, so blank is always valid.
-function validate_details($dob, $gender, $mobile, $address) {
-    if ($dob !== '') {
-        $date = DateTime::createFromFormat('!Y-m-d', $dob);
-        if (!$date || $date->format('Y-m-d') !== $dob || $date > new DateTime()) {
-            return 'Please enter a valid date of birth.';
-        }
-    }
-    if ($gender !== '' && !in_array($gender, GENDERS, true)) {
-        return 'Please choose a gender from the list.';
-    }
+function validate_details($mobile, $address) {
     if ($mobile !== '' && !preg_match('/^\+?[0-9][0-9 ()-]{5,18}$/', $mobile)) {
         return 'Please enter a valid mobile number.';
     }

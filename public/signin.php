@@ -9,6 +9,8 @@ $next = $_GET['next'] ?? $_SESSION['next'] ?? '/home.php';
 unset($_SESSION['next']);
 
 $pageTitle = 'Sign in';
+$authHeadline = 'Good to see you again. <em>Your next chapter is waiting.</em>';
+$authText = 'New books, open requests and chats with fellow readers are right where you left them.';
 include __DIR__ . '/../templates/auth-top.php';
 ?>
 <h1>Welcome back</h1>
@@ -22,7 +24,7 @@ include __DIR__ . '/../templates/auth-top.php';
     </div>
     <div class="field">
         <label for="password">Password</label>
-        <input id="password" type="password" name="password" autocomplete="current-password" required>
+        <?= password_input('password', 'password', 'autocomplete="current-password" required') ?>
         <p class="help"><a class="link" href="/forgot-password.php">Forgot your password?</a></p>
     </div>
     <button class="btn btn--primary btn--block" type="submit">Sign in</button>
