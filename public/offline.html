@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>You're offline - Bookworm Buddies</title>
+    <style>
+        :root { color-scheme: light dark; --paper: #faf7f2; --ink: #221d17; --muted: #655c50; --accent: #a8431a; --on-accent: #fff; }
+        @media (prefers-color-scheme: dark) { :root { --paper: #181511; --ink: #f2ece2; --muted: #b5aa9a; --accent: #e08a5f; --on-accent: #1d1209; } }
+        body { display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 24px; box-sizing: border-box; background: var(--paper); color: var(--ink); font: 1rem/1.5 system-ui, sans-serif; text-align: center; }
+        h1 { margin: 0 0 8px; font: 600 1.6rem Georgia, serif; }
+        p { margin: 0 0 20px; color: var(--muted); }
+        a { display: inline-block; min-height: 24px; padding: 10px 20px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 500; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>You're offline</h1>
+        <p>Bookworm Buddies needs the internet. Check your connection and try again.</p>
+        <a href="/home.php">Try again</a>
+    </main>
+</body>
+</html>

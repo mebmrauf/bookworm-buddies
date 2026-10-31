@@ -46,7 +46,13 @@ include __DIR__ . '/../../templates/auth-top.php';
     </div>
     <div class="field">
         <label for="password">Password</label>
-        <input id="password" type="password" name="password" autocomplete="current-password" required>
+        <div class="password-field">
+            <input id="password" type="password" name="password" autocomplete="current-password" required>
+            <button type="button" class="password-field__toggle" data-password-toggle aria-label="Show password" aria-pressed="false">
+                <span data-eye-show><?= icon('eye') ?></span>
+                <span data-eye-hide hidden><?= icon('eye-off') ?></span>
+            </button>
+        </div>
     </div>
     <button class="btn btn--primary btn--block" type="submit">Sign in</button>
 </form>

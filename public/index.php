@@ -25,8 +25,9 @@ include __DIR__ . '/../templates/top.php';
         <p class="hero__lead">Borrow books from other readers, and lend the ones you've finished. It's free, and you can look around without an account.</p>
         <div class="actions">
             <a class="btn btn--primary btn--large" href="/home.php">Browse books</a>
-            <a class="btn btn--light btn--large" href="/signup.php">Join free</a>
+            <button type="button" class="btn btn--on-image btn--large" data-install hidden>Install app</button>
         </div>
+        <p class="hero__hint" data-ios-hint hidden>To install on iPhone: tap the Share button in Safari, then "Add to Home Screen".</p>
     </div>
 </section>
 
@@ -66,7 +67,7 @@ include __DIR__ . '/../templates/top.php';
 
 <section class="landing__section landing__cta">
     <h2>Got books gathering dust?</h2>
-    <p class="muted">Put them on your shelf and let someone else enjoy them. Your contact details stay private until a request is accepted.</p>
+    <p class="muted">Put them on your shelf and let someone else enjoy them.</p>
     <a class="btn btn--primary btn--large" href="/signup.php">Create a free account</a>
     <a class="link" href="/rules.php">Rules and policies</a>
 </section>

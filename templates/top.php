@@ -11,7 +11,8 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <?php include __DIR__ . '/pwa-head.php'; ?>
     <title><?= e($pageTitle) ?> - Bookworm Buddies</title>
     <?php if (isset($pageDescription)): ?><meta name="description" content="<?= e($pageDescription) ?>"><?php endif; ?>
     <link rel="preload" href="/assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
@@ -50,6 +51,7 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
                         <p class="menu__name"><?= e($me['first_name'] . ' ' . $me['last_name']) ?></p>
                         <a href="/settings.php"><?= icon('settings') ?>Settings</a>
                         <a href="/rules.php"><?= icon('book') ?>Rules and policies</a>
+                        <button type="button" data-install hidden><?= icon('plus') ?>Install app</button>
                         <form action="/actions/logout.php" method="post">
                             <?= csrf_field() ?>
                             <button type="submit"><?= icon('logout') ?>Log out</button>
