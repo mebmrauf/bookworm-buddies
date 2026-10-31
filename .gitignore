@@ -1,0 +1,6 @@
+config.php
+ca.pem
+demo-accounts.php
+.DS_Store
+.claude/
+.vscode/

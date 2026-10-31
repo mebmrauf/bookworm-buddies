@@ -1,0 +1,100 @@
+body {
+  margin: 0;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 0.7rem 1.5rem;
+}
+
+.logo {
+  color: white;
+  font-size: 2.8rem;
+  font-family: "Bebas Neue", sans-serif;
+  margin-right: 3rem;
+}
+
+.logo a {
+  color: white;
+  text-decoration: none;
+}
+
+.logo a:hover {
+  color: #f1f1f1;
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  gap: 1rem;
+}
+
+.nav-links li {
+  display: inline;
+}
+
+.nav-links a {
+  color: white;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  transition: background-color 0.3s;
+}
+
+.nav-links a:hover {
+  background-color: #575757;
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .nav-links {
+    flex-wrap: wrap;
+    padding: 0;
+  }
+
+  .navbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+#search-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f1f1f1;
+  border-radius: 5px;
+  padding: 5px;
+  width: 100%;
+  max-width: 210px;
+  margin: 0 auto;
+}
+
+#search-form {
+  display: flex;
+  width: 100%;
+}
+
+#search-bar {
+  flex-grow: 1;
+  width: 70%;
+  padding: 10px;
+  border: none;
+  border-radius: 5px 0 0 5px;
+  outline: none;
+}
+
+#search-btn {
+  background-color: #333;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 0 5px 5px 0;
+  cursor: pointer;
+}
+
+#search-btn:hover {
+  background-color: #555;
+}
