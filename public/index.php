@@ -5,16 +5,26 @@ if ($userID) {
     go('/home.php');
 }
 
-$showcased = "FROM collection c JOIN books b ON c.bookID = b.bookID JOIN users u ON c.userID = u.userID WHERE " . VISIBLE_BOOK;
-
+// Looks through a fixed window of the newest books, so the home page costs the same at any size.
 $books = run("
     SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, u.username, u.userID AS ownerID, u.city, u.area
-    $showcased
-    ORDER BY b.cover_public_id IS NULL, b.bookID DESC
+    FROM (SELECT bookID, userID FROM collection FORCE INDEX (browse_all) WHERE showcase = 1 ORDER BY bookID DESC LIMIT " . HIGHLIGHT_WINDOW . ") c
+    STRAIGHT_JOIN books b ON c.bookID = b.bookID
+    STRAIGHT_JOIN users u ON c.userID = u.userID
+    WHERE u.suspended_at IS NULL AND b.cover_public_id IS NOT NULL
+    ORDER BY c.bookID DESC
     LIMIT 12
 ")->get_result();
 
-$pageTitle = 'Share and borrow books';
+$posts = run("
+    SELECT p.postID, p.title, p.book_title, p.excerpt, u.username
+    FROM posts p STRAIGHT_JOIN users u ON p.userID = u.userID
+    WHERE p.removed_at IS NULL AND u.suspended_at IS NULL
+    ORDER BY p.postID DESC
+    LIMIT 3
+")->get_result()->fetch_all(MYSQLI_ASSOC);
+
+$pageTitle = 'Bookworm Buddies';
 $pageDescription = 'Bookworm Buddies is a free community for lending books. Browse shared books, borrow what you want to read and lend what you have finished.';
 $mainClass = 'landing';
 include __DIR__ . '/../templates/top.php';
@@ -45,6 +55,26 @@ include __DIR__ . '/../templates/top.php';
     </div>
 </section>
 <?php endif; ?>
+
+<?php if ($posts): ?>
+<section class="landing__section">
+    <div class="landing__head">
+        <h2>From the blog</h2>
+        <a class="link" href="/blog.php">See all posts</a>
+    </div>
+    <div class="post-grid">
+        <?php foreach ($posts as $post): ?>
+            <article class="post-card">
+                <h3><a href="/post.php?id=<?= (int) $post['postID'] ?>"><?= e($post['title']) ?></a></h3>
+                <p class="muted">On <?= e($post['book_title']) ?> · by <?= e($post['username']) ?></p>
+                <p><?= e($post['excerpt']) ?></p>
+            </article>
+        <?php endforeach; ?>
+    </div>
+</section>
+<?php endif; ?>
+
+<section class="landing__section landing__quote"><?= quote_of_the_day() ?></section>
 
 <section class="landing__section landing__section--tint">
     <div class="landing__inner">

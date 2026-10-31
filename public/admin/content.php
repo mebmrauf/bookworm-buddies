@@ -17,10 +17,32 @@ $ratings = run("
     ORDER BY r.ratingID DESC LIMIT " . SHOW_LATEST
 )->get_result()->fetch_all(MYSQLI_ASSOC);
 
+$posts = run("
+    SELECT p.postID, p.title, p.book_title, p.removed_at, p.removed_reason, u.userID, u.username
+    FROM posts p JOIN users u ON p.userID = u.userID
+    ORDER BY p.postID DESC LIMIT " . SHOW_LATEST
+)->get_result()->fetch_all(MYSQLI_ASSOC);
+
 $pageTitle = 'Comments';
 include __DIR__ . '/../../templates/admin-top.php';
 ?>
 <div class="page-head"><h1>Comments</h1></div>
+<section class="section">
+    <h2>Latest blog posts</h2>
+    <?php if (!$posts): ?><p class="muted">No posts yet.</p><?php endif; ?>
+    <ul class="admin-list">
+        <?php foreach ($posts as $post): ?>
+            <li class="admin-row">
+                <div class="admin-row__main">
+                    <p><a class="link" href="/post.php?id=<?= (int) $post['postID'] ?>"><?= e($post['title']) ?></a> by <a class="link" href="/profile.php?userID=<?= (int) $post['userID'] ?>">@<?= e($post['username']) ?></a></p>
+                    <p class="muted">On <?= e($post['book_title']) ?></p>
+                    <?php if ($post['removed_at']): ?><p><span class="tag tag--declined">Taken down</span> <?= e($post['removed_reason']) ?></p><?php endif; ?>
+                </div>
+                <div class="admin-row__actions"><?= $post['removed_at'] ? admin_action('restore_post', $post['postID'], 'Restore') : admin_action('takedown_post', $post['postID'], 'Take down', true) ?></div>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</section>
 <section class="section">
     <h2>Latest ratings</h2>
     <?php if (!$ratings): ?><p class="muted">No ratings yet.</p><?php endif; ?>

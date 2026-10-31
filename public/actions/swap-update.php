@@ -28,7 +28,7 @@ $move = fn($from, $to) => run("UPDATE swap SET status = ? WHERE swapID = ? AND s
 
 // Hands the book over for good. New owners start with it private, so they decide what to do next.
 function transfer_book($bookID, $toUserID) {
-    run("UPDATE collection SET userID = ?, showcase = 0 WHERE bookID = ?", 'ii', $toUserID, $bookID);
+    run("UPDATE collection c JOIN users u ON u.userID = ? SET c.userID = u.userID, c.showcase = 0, c.city = u.city WHERE c.bookID = ?", 'ii', $toUserID, $bookID);
 }
 
 $rateNote = fn($name, $email) => notify($email, $name, "Rate your exchange: $title", "The exchange for $title is finished. Please rate it, so the community knows who to trust.");

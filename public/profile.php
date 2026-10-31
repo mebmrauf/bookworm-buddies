@@ -29,6 +29,13 @@ $ratings = $user ? run("
     LIMIT 10
 ", 'i', $profileID)->get_result()->fetch_all(MYSQLI_ASSOC) : [];
 
+$posts = $user ? run("
+    SELECT postID, title, book_title FROM posts
+    WHERE userID = ? AND removed_at IS NULL
+    ORDER BY postID DESC
+    LIMIT 10
+", 'i', $profileID)->get_result()->fetch_all(MYSQLI_ASSOC) : [];
+
 $books = [];
 if ($user && $show === 'borrowed') {
     $books = run("
@@ -37,13 +44,15 @@ if ($user && $show === 'borrowed') {
         JOIN books b ON s.bookID = b.bookID
         JOIN users u ON s.ownerID = u.userID
         WHERE s.requesterID = ? AND s.status = 'accepted'
+        LIMIT 60
     ", 'i', $userID)->get_result()->fetch_all(MYSQLI_ASSOC);
 } elseif ($user) {
     $books = run("
         SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, c.showcase
         FROM collection c JOIN books b ON c.bookID = b.bookID
         WHERE c.userID = ? AND (c.showcase = 1 OR ? = 'all')
-        ORDER BY b.bookID DESC
+        ORDER BY c.bookID DESC
+        LIMIT 60
     ", 'is', $profileID, $show)->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
@@ -111,6 +120,16 @@ include __DIR__ . '/../templates/top.php';
             } ?>
         </div>
     <?php endif; ?>
+<?php endif; ?>
+<?php if ($user && $posts): ?>
+    <section class="section">
+        <h2>Blog posts</h2>
+        <ul class="post-links">
+            <?php foreach ($posts as $post): ?>
+                <li><a class="link" href="/post.php?id=<?= (int) $post['postID'] ?>"><?= e($post['title']) ?></a> <span class="muted">on <?= e($post['book_title']) ?></span></li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
 <?php endif; ?>
 <?php if ($user && $ratings): ?>
     <section class="section feedback">

@@ -180,6 +180,7 @@ foreach ($feedback as [$title, $person, $comment, $reply]) {
     $addFeedback->execute();
 }
 
+$conn->query("UPDATE collection c JOIN users u ON c.userID = u.userID SET c.city = u.city");
 $conn->query("UPDATE books SET handover = 'both' WHERE MOD(bookID, 3) = 0");
 $conn->query("UPDATE books b LEFT JOIN swap s ON s.activeBookID = b.bookID SET b.listing_type = 'give' WHERE MOD(b.bookID, 7) = 0 AND s.swapID IS NULL");
 $conn->query("UPDATE books b LEFT JOIN swap s ON s.activeBookID = b.bookID SET b.listing_type = 'swap' WHERE MOD(b.bookID, 5) = 0 AND b.listing_type = 'lend' AND s.swapID IS NULL");

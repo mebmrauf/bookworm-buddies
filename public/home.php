@@ -7,12 +7,8 @@ $onlyAvailable = ($_GET['available'] ?? '') === '1';
 $availableFilter = $onlyAvailable ? 'AND NOT ' . BOOK_BUSY : '';
 $listing = isset(LISTING_TYPES[$_GET['type'] ?? '']) ? $_GET['type'] : '';
 
-$cities = array_column(run("
-    SELECT DISTINCT u.city
-    FROM collection c JOIN users u ON c.userID = u.userID
-    WHERE " . VISIBLE_BOOK . " AND u.city IS NOT NULL AND u.userID != ?
-    ORDER BY u.city
-", 'i', $userID)->get_result()->fetch_all(), 0);
+// Reads straight from an index, so it stays quick however many books exist.
+$cities = array_column(run("SELECT city FROM collection WHERE showcase = 1 AND city IS NOT NULL GROUP BY showcase, city ORDER BY city")->get_result()->fetch_all(), 0);
 
 $myCity = current_user()['city'] ?? null;
 
@@ -20,27 +16,41 @@ $myCity = current_user()['city'] ?? null;
 $requested = is_string($_GET['city'] ?? null) ? $_GET['city'] : null;
 $city = $requested === null ? (in_array($myCity, $cities, true) ? $myCity : '') : (in_array($requested, $cities, true) ? $requested : '');
 
-$from = "
-    FROM collection c
-    JOIN books b ON c.bookID = b.bookID
-    JOIN users u ON c.userID = u.userID
-    WHERE " . VISIBLE_BOOK . " AND u.userID != ? " . ($city !== '' ? 'AND u.city = ?' : '') . ($listing !== '' ? " AND b.listing_type = '$listing'" : '') . " $availableFilter
-";
-$types = $city !== '' ? 'is' : 'i';
-$params = $city !== '' ? [$userID, $city] : [$userID];
+// Each page continues from the last book of the previous one. Page numbers and totals would mean counting
+// or skipping every earlier row, which gets slower as the site grows.
+$before = max(0, (int) ($_GET['before'] ?? 0));
 
-$total = run("SELECT COUNT(*) $from", $types, ...$params)->get_result()->fetch_row()[0];
-$pages = max(1, (int) ceil($total / PER_PAGE));
-$page = min($pages, max(1, (int) ($_GET['page'] ?? 1)));
-$offset = ($page - 1) * PER_PAGE;
+$types = 'i';
+$params = [$userID];
+$where = VISIBLE_BOOK . ' AND c.userID != ?';
+if ($city !== '') {
+    $where .= ' AND c.city = ?';
+    $types .= 's';
+    $params[] = $city;
+}
+if ($before > 0) {
+    $where .= ' AND c.bookID < ?';
+    $types .= 'i';
+    $params[] = $before;
+}
+if ($listing !== '') {
+    $where .= " AND b.listing_type = '$listing'";
+}
+$where .= " $availableFilter";
 
-$books = run("
+$rows = run("
     SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.handover, b.listing_type, u.username, u.userID AS ownerID, u.city, u.area,
         " . BOOK_BUSY . " AS unavailable
-    $from
-    ORDER BY b.bookID DESC
-    LIMIT ? OFFSET ?
-", $types . 'ii', ...[...$params, PER_PAGE, $offset])->get_result();
+    FROM collection c FORCE INDEX (" . ($city !== '' ? 'browse_city' : 'browse_all') . ")
+    STRAIGHT_JOIN books b ON c.bookID = b.bookID
+    STRAIGHT_JOIN users u ON c.userID = u.userID
+    WHERE $where
+    ORDER BY c.bookID DESC
+    LIMIT ?
+", $types . 'i', ...[...$params, PER_PAGE + 1])->get_result()->fetch_all(MYSQLI_ASSOC);
+
+$hasMore = count($rows) > PER_PAGE;
+$books = array_slice($rows, 0, PER_PAGE);
 
 $pageTitle = 'Browse books';
 $navActive = 'browse';
@@ -55,7 +65,7 @@ $url = fn($changes) => '/home.php?' . http_build_query($changes + ['city' => $ci
 <div class="page-head">
     <div>
         <h1>Browse books</h1>
-        <p class="muted"><?= (int) $total ?> <?= $total === 1 ? 'book' : 'books' ?><?= $city !== '' ? ' in ' . e($city) : ' across all cities' ?><?= $onlyAvailable ? ' ready to borrow' : '' ?></p>
+        <p class="muted">Books <?= $city !== '' ? 'in ' . e($city) : 'across all cities' ?><?= $onlyAvailable ? ' ready to request' : '' ?></p>
     </div>
     <div class="filters">
         <form class="filters__city" action="/home.php" method="get" data-autosubmit>
@@ -83,7 +93,7 @@ $url = fn($changes) => '/home.php?' . http_build_query($changes + ['city' => $ci
     </div>
 </div>
 
-<?php if ($total === 0): ?>
+<?php if (!$books): ?>
     <div class="empty">
         <h2>No books found<?= $city !== '' ? ' in ' . e($city) : '' ?></h2>
         <p class="muted">Try another city, or be the first to share something from your shelf.</p>
@@ -94,15 +104,14 @@ $url = fn($changes) => '/home.php?' . http_build_query($changes + ['city' => $ci
     </div>
 <?php else: ?>
     <div class="book-grid">
-        <?php while ($book = $books->fetch_assoc()) {
+        <?php foreach ($books as $book) {
             include __DIR__ . '/../templates/book-card.php';
         } ?>
     </div>
-    <?php if ($pages > 1): ?>
-        <nav class="pagination" aria-label="Pages">
-            <?php if ($page > 1): ?><a class="btn btn--ghost" rel="prev" href="<?= e($url(['page' => $page - 1])) ?>">Previous</a><?php endif; ?>
-            <span class="muted">Page <?= $page ?> of <?= $pages ?></span>
-            <?php if ($page < $pages): ?><a class="btn btn--ghost" rel="next" href="<?= e($url(['page' => $page + 1])) ?>">Next</a><?php endif; ?>
+    <?php if ($hasMore || $before > 0): ?>
+        <nav class="pagination" aria-label="More books">
+            <?php if ($before > 0): ?><a class="btn btn--ghost" href="<?= e($url([])) ?>">Newest</a><?php endif; ?>
+            <?php if ($hasMore): ?><a class="btn btn--primary" rel="next" href="<?= e($url(['before' => end($books)['bookID']])) ?>">More books</a><?php endif; ?>
         </nav>
     <?php endif; ?>
 <?php endif; ?>

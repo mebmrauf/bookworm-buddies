@@ -1257,6 +1257,68 @@ html.is-loading button[aria-busy="true"] { opacity: 0.7; cursor: progress; }
   .chat__log { height: calc(100dvh - 430px); }
 }
 
+/* Quote of the day */
+
+.book-quote {
+  max-width: 720px;
+  margin: 0 auto 24px;
+  padding: 4px 0 4px 18px;
+  border-left: 3px solid var(--accent);
+}
+
+.book-quote__label { margin-bottom: 6px; color: var(--accent); font-size: 0.8rem; font-weight: 600; }
+.book-quote blockquote { margin: 0; font: 500 clamp(1.15rem, 1rem + 0.8vw, 1.5rem)/1.35 var(--serif); text-wrap: balance; }
+.book-quote figcaption { margin-top: 8px; color: var(--muted); font-size: 0.9rem; }
+.landing__quote { padding-top: 8px; padding-bottom: 40px; }
+.landing__quote .book-quote { margin-bottom: 0; }
+
+/* Blog */
+
+.post-grid { display: grid; gap: 16px; }
+
+.post-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+
+.post-card__image {
+  display: block;
+  width: calc(100% + 32px);
+  max-width: none;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  margin: -16px -16px 8px;
+  object-fit: cover;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--sunken);
+}
+
+.post-card h2,
+.post-card h3 { font-size: 1.15rem; }
+.post-card a { text-decoration: none; }
+.post-card h2 a:hover,
+.post-card h3 a:hover { color: var(--accent); }
+.post-card .muted { font-size: 0.85rem; }
+
+.blog-search { display: flex; gap: 8px; flex: 1 1 260px; max-width: 420px; }
+.blog-search input { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid #8f8576; border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; }
+
+.post { max-width: 720px; margin: 0 auto; overflow-wrap: anywhere; }
+.post__book { margin-top: 8px; color: var(--muted); font-size: 1.05rem; }
+.post__meta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 16px 0 20px; }
+.post__image { display: block; width: 100%; height: auto; margin-bottom: 24px; border-radius: var(--radius); background: var(--sunken); }
+.post__body p { margin-bottom: 16px; font-size: 1.05rem; line-height: 1.7; }
+.post__actions { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+.post-links { margin: 0; padding-left: 18px; }
+.post-links li { margin-bottom: 6px; }
+
 /* Forms */
 
 .form {
@@ -1654,6 +1716,7 @@ select {
   .form__row { grid-template-columns: 1fr 1fr; }
   .people { grid-template-columns: repeat(2, 1fr); }
   .swap__cover { width: 88px; }
+  .post-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .about__grid { grid-template-columns: 1fr 1fr; }
   .steps { grid-template-columns: repeat(3, 1fr); }
   .book-detail { grid-template-columns: 240px 1fr; gap: 32px; }
@@ -1713,6 +1776,7 @@ select {
 
   .page { padding: 32px 24px 56px; }
   .landing { padding-bottom: 0; }
+  .post-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .about__hero { grid-template-columns: 1.2fr 1fr; gap: 48px; }
   .about__collage { justify-self: end; }
   .about__collage img:nth-child(n + 7) { display: block; }

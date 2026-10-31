@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../src/bootstrap.php';
+require_once __DIR__ . '/../src/search.php';
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_BOOKS = 6;
@@ -12,18 +13,7 @@ $q = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
 $response = ['books' => [], 'people' => []];
 
 if (mb_strlen($q) >= MIN_QUERY_LENGTH) {
-    $pattern = like_pattern($q);
-
-    $books = run("
-        SELECT b.bookID, b.title, b.author, b.cover_public_id, u.city, u.area
-        FROM books b
-        JOIN collection c ON b.bookID = c.bookID
-        JOIN users u ON c.userID = u.userID
-        WHERE (b.title LIKE ? OR b.author LIKE ?) AND ((" . VISIBLE_BOOK . ") OR c.userID = ?)
-        ORDER BY b.title
-        LIMIT " . MAX_BOOKS,
-        'ssi', $pattern, $pattern, $userID
-    )->get_result();
+    $books = search_books($q, $userID, MAX_BOOKS);
 
     while ($book = $books->fetch_assoc()) {
         $response['books'][] = [
@@ -37,14 +27,7 @@ if (mb_strlen($q) >= MIN_QUERY_LENGTH) {
 
     // Finding people is for members, so names can't be scraped by anyone passing by.
     if ($userID) {
-        $people = run("
-            SELECT userID, username, first_name, last_name, city, area
-            FROM users
-            WHERE suspended_at IS NULL AND (username LIKE ? OR first_name LIKE ? OR last_name LIKE ?)
-            ORDER BY first_name
-            LIMIT " . MAX_PEOPLE,
-            'sss', $pattern, $pattern, $pattern
-        )->get_result();
+        $people = search_people($q, MAX_PEOPLE);
 
         while ($person = $people->fetch_assoc()) {
             $response['people'][] = [

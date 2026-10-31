@@ -5,9 +5,11 @@ const COLLAGE_SIZE = 9;
 
 $covers = cloudinary_enabled() ? array_column(run("
     SELECT b.cover_public_id
-    FROM collection c JOIN books b ON c.bookID = b.bookID JOIN users u ON c.userID = u.userID
-    WHERE " . VISIBLE_BOOK . " AND b.cover_public_id IS NOT NULL
-    ORDER BY b.bookID DESC
+    FROM (SELECT bookID, userID FROM collection FORCE INDEX (browse_all) WHERE showcase = 1 ORDER BY bookID DESC LIMIT " . HIGHLIGHT_WINDOW . ") c
+    STRAIGHT_JOIN books b ON c.bookID = b.bookID
+    STRAIGHT_JOIN users u ON c.userID = u.userID
+    WHERE u.suspended_at IS NULL AND b.cover_public_id IS NOT NULL
+    ORDER BY c.bookID DESC
     LIMIT " . COLLAGE_SIZE
 )->get_result()->fetch_all(), 0) : [];
 

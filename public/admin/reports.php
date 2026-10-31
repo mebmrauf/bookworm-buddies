@@ -43,6 +43,13 @@ function report_target($report) {
                 'Rating by <a class="link" href="/profile.php?userID=' . (int) $row['userID'] . '">@' . e($row['username']) . '</a>: ' . (int) $row['stars'] . ' stars "' . e($row['comment']) . '"',
                 admin_action('delete_rating', $id, 'Delete rating', false, 'Delete this rating?') . ($row['suspended_at'] ? '' : admin_action('suspend', $row['userID'], 'Suspend author', true)),
             ];
+        case 'post':
+            $row = run("SELECT p.title, p.removed_at, u.userID, u.username, u.suspended_at FROM posts p JOIN users u ON p.userID = u.userID WHERE p.postID = ?", 'i', $id)->get_result()->fetch_assoc();
+            if (!$row) break;
+            return [
+                'Blog post by <a class="link" href="/profile.php?userID=' . (int) $row['userID'] . '">@' . e($row['username']) . '</a>: <a class="link" href="/post.php?id=' . $id . '">' . e($row['title']) . '</a>',
+                ($row['removed_at'] ? '' : admin_action('takedown_post', $id, 'Take down', true)) . ($row['suspended_at'] ? '' : admin_action('suspend', $row['userID'], 'Suspend author', true)),
+            ];
         case 'message':
             // The only way an admin sees a chat message: someone in the chat reported it.
             $row = run("SELECT m.body, u.userID, u.username, u.suspended_at FROM messages m JOIN users u ON m.senderID = u.userID WHERE m.messageID = ?", 'i', $id)->get_result()->fetch_assoc();

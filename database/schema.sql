@@ -42,6 +42,7 @@ CREATE TABLE collection (
     userID INT NOT NULL,
     bookID INT NOT NULL UNIQUE,
     showcase BOOLEAN NOT NULL DEFAULT 0,
+    city VARCHAR(40),
     FOREIGN KEY (userID) REFERENCES users(userID) ON DELETE CASCADE,
     FOREIGN KEY (bookID) REFERENCES books(bookID) ON DELETE CASCADE
 );
@@ -109,7 +110,7 @@ CREATE TABLE ratings (
 CREATE TABLE reports (
     reportID INT AUTO_INCREMENT PRIMARY KEY,
     reporterID INT NOT NULL,
-    target_type ENUM('book', 'user', 'feedback', 'rating', 'message') NOT NULL,
+    target_type ENUM('book', 'user', 'feedback', 'rating', 'message', 'post') NOT NULL,
     target_id INT NOT NULL,
     reason VARCHAR(40) NOT NULL,
     details VARCHAR(500),
@@ -141,4 +142,23 @@ CREATE TABLE messages (
     INDEX (senderID, created_at),
     FOREIGN KEY (swapID) REFERENCES swap(swapID) ON DELETE CASCADE,
     FOREIGN KEY (senderID) REFERENCES users(userID) ON DELETE CASCADE
+);
+
+CREATE TABLE posts (
+    postID INT AUTO_INCREMENT PRIMARY KEY,
+    userID INT NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    book_title VARCHAR(255) NOT NULL,
+    book_author VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    excerpt VARCHAR(240) NOT NULL,
+    image_public_id VARCHAR(255),
+    removed_at DATETIME,
+    removed_reason VARCHAR(255),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME,
+    INDEX listing (removed_at, postID),
+    INDEX by_author (userID, postID),
+    FULLTEXT INDEX post_search (title, book_title, book_author),
+    FOREIGN KEY (userID) REFERENCES users(userID) ON DELETE CASCADE
 );

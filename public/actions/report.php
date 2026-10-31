@@ -14,6 +14,7 @@ $lookups = [
     'feedback' => "SELECT 1 FROM feedback WHERE feedbackID = ?",
     'rating' => "SELECT 1 FROM ratings WHERE ratingID = ?",
     'message' => "SELECT 1 FROM messages WHERE messageID = ?",
+    'post' => "SELECT 1 FROM posts WHERE postID = ? AND removed_at IS NULL",
 ];
 if (!isset($lookups[$type]) || !in_array($reason, REPORT_REASONS, true) || mb_strlen($details) > 500 || !run($lookups[$type], 'i', $id)->get_result()->num_rows) {
     flash('That report could not be sent.', '/home.php');
