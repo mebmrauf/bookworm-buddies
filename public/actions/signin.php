@@ -21,7 +21,7 @@ if ($attempts >= MAX_ATTEMPTS) {
 }
 
 // Usernames can't contain @, so a value can only ever match one account.
-$user = run("SELECT userID, email, password, email_verified_at FROM users WHERE email = ? OR username = ?", 'ss', $login, $login)->get_result()->fetch_assoc();
+$user = run("SELECT userID, email, password, email_verified_at, suspended_at, suspended_reason FROM users WHERE email = ? OR username = ?", 'ss', $login, $login)->get_result()->fetch_assoc();
 
 if (!$user || !password_verify($password, $user['password'])) {
     run("INSERT INTO login_attempts (username, ip) VALUES (?, ?)", 'ss', $login, $ip);
@@ -33,6 +33,10 @@ run("DELETE FROM login_attempts WHERE username = ? AND ip = ?", 'ss', $login, $i
 if (!$user['email_verified_at']) {
     $_SESSION['verify_email'] = $user['email'];
     flash('Please confirm your email before signing in.', '/verify-email.php');
+}
+
+if ($user['suspended_at']) {
+    flash('This account is suspended: ' . $user['suspended_reason'] . ' See the community rules for how to get in touch.', '/signin.php');
 }
 
 session_regenerate_id(true);

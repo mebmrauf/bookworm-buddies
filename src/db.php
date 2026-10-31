@@ -1,7 +1,8 @@
 <?php
 function config($key) {
     static $config = null;
-    $config ??= require __DIR__ . '/../config.php';
+    // The test suite points this at its own file to run a server with a known admin login.
+    $config ??= require getenv('BOOKWORM_CONFIG') ?: __DIR__ . '/../config.php';
     return $config[$key] ?? null;
 }
 

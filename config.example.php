@@ -19,6 +19,15 @@ return [
     // Public address of the site, used for links in emails.
     'app_url' => 'http://localhost:8000',
 
+    // Admin login at /admin. Create the hash with: php tools/hash-password.php
+    'admin' => [
+        'email' => '',
+        'password_hash' => '',
+    ],
+
+    // Secret for the daily reminder link. Any long random text. Leave blank to turn the link off.
+    'cron_token' => '',
+
     // Optional: shown in the footer so rights holders can ask for a cover to be removed.
     'contact_email' => '',
 

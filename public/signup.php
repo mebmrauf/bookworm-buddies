@@ -29,6 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $firstName = $parts[0] ?? '';
     $lastName = $parts[1] ?? '';
     $error = validate_name($firstName, $lastName) ?? validate_email($email) ?? validate_password($password);
+    if (!$error && post('agree') !== '1') {
+        $error = 'Please agree to the community rules to create an account.';
+    }
 
     if (!$error) {
         // An account nobody confirmed in time must not block the real owner of that email.
@@ -37,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newUser = false;
         try {
             run(
-                "INSERT INTO users (username, password, email, first_name, last_name) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO users (username, password, email, first_name, last_name, rules_accepted_at) VALUES (?, ?, ?, ?, ?, NOW())",
                 'sssss', generate_username($firstName, $lastName), password_hash($password, PASSWORD_DEFAULT), $email, $firstName, $lastName
             );
             $newUser = true;
@@ -79,6 +82,7 @@ include __DIR__ . '/../templates/auth-top.php';
         <input id="password" type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="password-help" required>
         <p class="help" id="password-help">At least 8 characters.</p>
     </div>
+    <label class="check"><input type="checkbox" name="agree" value="1"<?= post('agree') === '1' ? ' checked' : '' ?> required> <span>I agree to the <a class="link" href="/rules.php" target="_blank" rel="noopener">community rules</a></span></label>
     <button class="btn btn--primary btn--block" type="submit">Create account</button>
 </form>
 <p class="auth__switch">Already have an account? <a class="link" href="/signin.php">Sign in</a></p>

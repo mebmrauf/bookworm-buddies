@@ -4,12 +4,13 @@ require_once __DIR__ . '/../src/bootstrap.php';
 const PER_PAGE = 24;
 
 $onlyAvailable = ($_GET['available'] ?? '') === '1';
-$availableFilter = $onlyAvailable ? "AND NOT EXISTS (SELECT 1 FROM swap s WHERE s.bookID = b.bookID AND s.status IN ('pending', 'accepted'))" : '';
+$availableFilter = $onlyAvailable ? 'AND NOT ' . BOOK_BUSY : '';
+$listing = isset(LISTING_TYPES[$_GET['type'] ?? '']) ? $_GET['type'] : '';
 
 $cities = array_column(run("
     SELECT DISTINCT u.city
     FROM collection c JOIN users u ON c.userID = u.userID
-    WHERE c.showcase = 1 AND u.city IS NOT NULL AND u.userID != ?
+    WHERE " . VISIBLE_BOOK . " AND u.city IS NOT NULL AND u.userID != ?
     ORDER BY u.city
 ", 'i', $userID)->get_result()->fetch_all(), 0);
 
@@ -23,7 +24,7 @@ $from = "
     FROM collection c
     JOIN books b ON c.bookID = b.bookID
     JOIN users u ON c.userID = u.userID
-    WHERE c.showcase = 1 AND u.userID != ? " . ($city !== '' ? 'AND u.city = ?' : '') . " $availableFilter
+    WHERE " . VISIBLE_BOOK . " AND u.userID != ? " . ($city !== '' ? 'AND u.city = ?' : '') . ($listing !== '' ? " AND b.listing_type = '$listing'" : '') . " $availableFilter
 ";
 $types = $city !== '' ? 'is' : 'i';
 $params = $city !== '' ? [$userID, $city] : [$userID];
@@ -34,8 +35,8 @@ $page = min($pages, max(1, (int) ($_GET['page'] ?? 1)));
 $offset = ($page - 1) * PER_PAGE;
 
 $books = run("
-    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.handover, u.username, u.userID AS ownerID, u.city, u.area,
-        EXISTS (SELECT 1 FROM swap s WHERE s.bookID = b.bookID AND s.status IN ('pending', 'accepted')) AS unavailable
+    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.handover, b.listing_type, u.username, u.userID AS ownerID, u.city, u.area,
+        " . BOOK_BUSY . " AS unavailable
     $from
     ORDER BY b.bookID DESC
     LIMIT ? OFFSET ?
@@ -45,7 +46,7 @@ $pageTitle = 'Browse books';
 $navActive = 'browse';
 include __DIR__ . '/../templates/top.php';
 
-$url = fn($changes) => '/home.php?' . http_build_query($changes + ['city' => $city === '' ? 'all' : $city, 'available' => $onlyAvailable ? '1' : null]);
+$url = fn($changes) => '/home.php?' . http_build_query($changes + ['city' => $city === '' ? 'all' : $city, 'type' => $listing ?: null, 'available' => $onlyAvailable ? '1' : null]);
 ?>
 <?php if ($userID && !$myCity): ?>
     <p class="notice notice--info"><a class="link" href="/settings.php">Add your city</a> to see books near you first, and to let others know where you are.</p>
@@ -63,6 +64,13 @@ $url = fn($changes) => '/home.php?' . http_build_query($changes + ['city' => $ci
                 <option value="all">All cities</option>
                 <?php foreach ($cities as $option): ?>
                     <option value="<?= e($option) ?>"<?= $option === $city ? ' selected' : '' ?>><?= e($option) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <label class="visually-hidden" for="type">Type</label>
+            <select id="type" name="type">
+                <option value="">Any type</option>
+                <?php foreach (LISTING_TYPES as $value => $label): ?>
+                    <option value="<?= $value ?>"<?= $listing === $value ? ' selected' : '' ?>><?= e(['lend' => 'To borrow', 'give' => 'Free to keep', 'swap' => 'To swap'][$value]) ?></option>
                 <?php endforeach; ?>
             </select>
             <?php if ($onlyAvailable): ?><input type="hidden" name="available" value="1"><?php endif; ?>

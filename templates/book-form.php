@@ -17,6 +17,12 @@
         <input id="year_published" type="number" inputmode="numeric" name="year_published" min="1" max="<?= date('Y') ?>" value="<?= e($values['year_published']) ?>" required>
     </div>
     <fieldset class="choices">
+        <legend>What would you like to do with it?</legend>
+        <?php foreach (LISTING_DESCRIPTIONS as $value => $label): ?>
+            <label class="check"><input type="radio" name="listing_type" value="<?= $value ?>"<?= ($values['listing_type'] ?? 'lend') === $value ? ' checked' : '' ?>> <?= e($label) ?></label>
+        <?php endforeach; ?>
+    </fieldset>
+    <fieldset class="choices">
         <legend>How can people get this book?</legend>
         <?php foreach (HANDOVERS as $value => $label): ?>
             <label class="check"><input type="radio" name="handover" value="<?= $value ?>"<?= ($values['handover'] ?? 'meet') === $value ? ' checked' : '' ?>> <?= e($label) ?></label>

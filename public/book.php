@@ -4,8 +4,11 @@ require_once __DIR__ . '/../src/bootstrap.php';
 $bookID = (int) ($_GET['id'] ?? 0);
 
 $book = run("
-    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.cover_credit, b.handover, c.showcase, c.userID AS ownerID,
-        u.username, u.first_name, u.last_name, u.avatar_public_id, u.city, u.area,
+    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.cover_credit, b.handover, b.listing_type, b.removed_at, b.removed_reason, c.showcase, c.userID AS ownerID,
+        u.username, u.first_name, u.last_name, u.avatar_public_id, u.city, u.area, u.suspended_at,
+        (SELECT AVG(stars) FROM ratings WHERE ratedID = u.userID) AS ratingAverage,
+        (SELECT COUNT(*) FROM ratings WHERE ratedID = u.userID) AS ratingCount,
+        (SELECT 1 FROM swap o WHERE o.activeOfferedID = b.bookID) AS offeredElsewhere,
         s.status AS swapStatus, s.requesterID
     FROM books b
     JOIN collection c ON b.bookID = c.bookID
@@ -16,7 +19,7 @@ $book = run("
 
 $isOwner = $book && $book['ownerID'] == $userID;
 $isRequester = $book && $userID && $book['requesterID'] == $userID;
-$canView = $book && ($book['showcase'] || $isOwner || $isRequester);
+$canView = $book && (($book['showcase'] && !$book['suspended_at']) || $isOwner || $isRequester);
 
 if (!$canView) {
     http_response_code(404);
@@ -41,6 +44,15 @@ $feedback = run("
 ", 'i', $bookID)->get_result();
 
 $myAddress = current_user()['address'] ?? null;
+$isBusy = $book['swapStatus'] || $book['offeredElsewhere'];
+
+// Books this person could offer in a two-way swap.
+$myBooks = $userID && $book['listing_type'] === 'swap' && !$isOwner ? run("
+    SELECT b.bookID, b.title
+    FROM collection c JOIN books b ON c.bookID = b.bookID
+    WHERE c.userID = ? AND c.showcase = 1 AND NOT " . BOOK_BUSY . "
+    ORDER BY b.title
+", 'i', $userID)->get_result()->fetch_all(MYSQLI_ASSOC) : [];
 
 $pageTitle = $book['title'];
 $navActive = $isOwner ? 'library' : 'browse';
@@ -58,9 +70,10 @@ include __DIR__ . '/../templates/top.php';
 
         <a class="person" href="/profile.php?userID=<?= (int) $book['ownerID'] ?>">
             <?= avatar($book, 40) ?>
-            <span><span class="muted">Shared by</span><strong><?= e($book['first_name'] . ' ' . $book['last_name']) ?></strong></span>
+            <span><span class="muted">Shared by</span><strong><?= e($book['first_name'] . ' ' . $book['last_name']) ?></strong><span class="muted"><?= e(stars_label($book['ratingAverage'], $book['ratingCount'])) ?></span></span>
         </a>
 
+        <span class="tag tag--<?= e($book['listing_type']) ?>"><?= e(LISTING_DESCRIPTIONS[$book['listing_type']]) ?></span>
         <ul class="book-facts">
             <?php if (location_label($book) !== ''): ?>
                 <li><?= icon('pin') ?><?= e(location_label($book)) ?></li>
@@ -85,16 +98,33 @@ include __DIR__ . '/../templates/top.php';
             <?php elseif ($isRequester): ?>
                 <span class="tag tag--success"><?= $book['swapStatus'] === 'accepted' ? 'You are borrowing this book' : 'You requested this book' ?></span>
                 <a class="btn btn--ghost" href="/requests.php">View request</a>
-            <?php elseif ($book['swapStatus']): ?>
+            <?php elseif ($isBusy): ?>
                 <span class="tag">Not Available</span>
             <?php elseif (!$userID): ?>
                 <a class="btn btn--primary" href="/signin.php?next=<?= urlencode("/book.php?id=$bookID") ?>">Sign in to request</a>
             <?php endif; ?>
         </div>
-        <?php if ($userID && !$isOwner && !$isRequester && !$book['swapStatus'] && $book['showcase']): ?>
+        <?php if ($isOwner && $book['removed_at']): ?>
+            <p class="notice notice--error">An admin took this book down: <?= e($book['removed_reason']) ?></p>
+        <?php endif; ?>
+        <?php if ($userID && !$isOwner && !$isRequester && !$isBusy && $book['showcase']): ?>
             <form id="request" class="form request-form" action="/actions/swap-request.php" method="post">
                 <?= csrf_field() ?>
                 <input type="hidden" name="bookID" value="<?= $bookID ?>">
+                <?php if ($book['listing_type'] === 'swap'): ?>
+                    <div class="field">
+                        <label for="offeredID">Which of your books would you swap for it?</label>
+                        <?php if ($myBooks): ?>
+                            <select id="offeredID" name="offeredID" required>
+                                <?php foreach ($myBooks as $mine): ?>
+                                    <option value="<?= (int) $mine['bookID'] ?>"><?= e($mine['title']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        <?php else: ?>
+                            <p class="help">You need a shared, available book to offer. <a class="link" href="/add-book.php">Add a book</a> first.</p>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
                 <?php if ($book['handover'] === 'both'): ?>
                     <fieldset class="choices">
                         <legend>How would you like to get it?</legend>
@@ -136,6 +166,9 @@ include __DIR__ . '/../templates/top.php';
                     <?php if (!empty($item['reply'])): ?>
                         <blockquote class="feedback__reply"><strong>Reply from the owner</strong><?= e($item['reply']) ?></blockquote>
                     <?php endif; ?>
+                    <?php if ($userID && $item['userID'] != $userID): ?>
+                        <?= report_form('feedback', $item['feedbackID']) ?>
+                    <?php endif; ?>
                     <?php if ($isOwner): ?>
                         <details class="feedback__respond">
                             <summary><?= empty($item['reply']) ? 'Reply' : 'Edit reply' ?></summary>
@@ -174,4 +207,7 @@ include __DIR__ . '/../templates/top.php';
         </form>
     <?php endif; ?>
 </section>
+<?php if ($userID && !$isOwner): ?>
+    <section class="section"><?= report_form('book', $bookID) ?></section>
+<?php endif; ?>
 <?php include __DIR__ . '/../templates/bottom.php'; ?>

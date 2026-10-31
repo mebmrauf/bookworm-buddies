@@ -19,7 +19,7 @@ if (mb_strlen($q) >= MIN_QUERY_LENGTH) {
         FROM books b
         JOIN collection c ON b.bookID = c.bookID
         JOIN users u ON c.userID = u.userID
-        WHERE (b.title LIKE ? OR b.author LIKE ?) AND (c.showcase = 1 OR c.userID = ?)
+        WHERE (b.title LIKE ? OR b.author LIKE ?) AND ((" . VISIBLE_BOOK . ") OR c.userID = ?)
         ORDER BY b.title
         LIMIT " . MAX_BOOKS,
         'ssi', $pattern, $pattern, $userID
@@ -40,7 +40,7 @@ if (mb_strlen($q) >= MIN_QUERY_LENGTH) {
         $people = run("
             SELECT userID, username, first_name, last_name, city, area
             FROM users
-            WHERE username LIKE ? OR first_name LIKE ? OR last_name LIKE ?
+            WHERE suspended_at IS NULL AND (username LIKE ? OR first_name LIKE ? OR last_name LIKE ?)
             ORDER BY first_name
             LIMIT " . MAX_PEOPLE,
             'sss', $pattern, $pattern, $pattern

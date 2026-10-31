@@ -12,6 +12,8 @@ header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 
 // Revalidates on normal visits, but unlike PHP's default no-store it lets the back button be instant.
+date_default_timezone_set('Asia/Dhaka');
+
 session_cache_limiter('');
 header('Cache-Control: private, no-cache');
 
@@ -25,6 +27,11 @@ require_once __DIR__ . '/mail.php';
 require_once __DIR__ . '/view.php';
 
 const DUPLICATE_KEY = 1062;
+
+// The SQL rule for a book anyone may see: shared by its owner, and the owner isn't suspended.
+const VISIBLE_BOOK = 'c.showcase = 1 AND u.suspended_at IS NULL';
+// A book in an open swap can't be requested or offered, whichever side of the swap it's on.
+const BOOK_BUSY = "EXISTS (SELECT 1 FROM swap s WHERE (s.bookID = b.bookID OR s.offered_bookID = b.bookID) AND s.status IN ('pending', 'accepted'))";
 
 // 0 means a guest. Public pages use this; private ones go through auth.php.
 $userID = (int) ($_SESSION['user_id'] ?? 0);
@@ -41,7 +48,7 @@ function current_user() {
         $user = !$userID ? null : run("
             SELECT first_name, last_name, avatar_public_id, city, address,
                 (SELECT COUNT(*) FROM swap WHERE ownerID = users.userID AND status = 'pending') AS pending
-            FROM users WHERE userID = ?
+            FROM users WHERE userID = ? AND suspended_at IS NULL
         ", 'i', $userID)->get_result()->fetch_assoc();
     }
     return $user;

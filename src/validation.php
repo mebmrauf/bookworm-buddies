@@ -3,6 +3,31 @@
 
 const GENDERS = ['Male', 'Female'];
 
+const LISTING_TYPES = ['lend' => 'Lend', 'give' => 'Give away', 'swap' => 'Swap'];
+
+const LISTING_DESCRIPTIONS = [
+    'lend' => 'Lend it, and get it back by a date you choose',
+    'give' => 'Give it away for free, and the new reader keeps it',
+    'swap' => 'Swap it for one of their books, and each of you keeps the new one',
+];
+
+const REPORT_REASONS = ['Inappropriate content', 'Spam or fake', 'Copyright', 'Harassment', 'Did not return or exchange a book', 'Something else'];
+
+const DEFAULT_LOAN_DAYS = 14;
+const MAX_LOAN_DAYS = 180;
+
+// Returns an error message, or null when valid.
+function validate_due_date($date) {
+    $parsed = DateTime::createFromFormat('!Y-m-d', $date);
+    if (!$parsed || $parsed->format('Y-m-d') !== $date) {
+        return 'Please choose a valid return date.';
+    }
+    if ($date <= date('Y-m-d') || $date > date('Y-m-d', strtotime('+' . MAX_LOAN_DAYS . ' days'))) {
+        return 'The return date must be within the next ' . MAX_LOAN_DAYS . ' days.';
+    }
+    return null;
+}
+
 const HANDOVERS = ['meet' => 'Meet in person', 'courier' => 'Courier, receiver pays', 'both' => 'Meet in person or courier'];
 
 // Bangladesh's 64 districts, so people pick the same spelling and the city filter stays clean.

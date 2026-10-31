@@ -14,7 +14,20 @@ if ($isOwn) {
     $show = in_array($_GET['show'] ?? '', ['showcased', 'borrowed'], true) ? $_GET['show'] : 'all';
 }
 
-$user = run("SELECT first_name, last_name, email, date_of_birth, gender, mobile, address, username, avatar_public_id, city, area FROM users WHERE userID = ?", 'i', $profileID)->get_result()->fetch_assoc();
+$user = run("
+    SELECT first_name, last_name, email, date_of_birth, gender, mobile, address, username, avatar_public_id, city, area,
+        (SELECT AVG(stars) FROM ratings WHERE ratedID = users.userID) AS ratingAverage,
+        (SELECT COUNT(*) FROM ratings WHERE ratedID = users.userID) AS ratingCount
+    FROM users WHERE userID = ? AND (suspended_at IS NULL OR userID = ?)
+", 'ii', $profileID, $userID)->get_result()->fetch_assoc();
+
+$ratings = $user ? run("
+    SELECT r.ratingID, r.stars, r.comment, r.raterID, u.username
+    FROM ratings r JOIN users u ON r.raterID = u.userID
+    WHERE r.ratedID = ?
+    ORDER BY r.ratingID DESC
+    LIMIT 10
+", 'i', $profileID)->get_result()->fetch_all(MYSQLI_ASSOC) : [];
 
 $books = [];
 if ($user && $show === 'borrowed') {
@@ -27,7 +40,7 @@ if ($user && $show === 'borrowed') {
     ", 'i', $userID)->get_result()->fetch_all(MYSQLI_ASSOC);
 } elseif ($user) {
     $books = run("
-        SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, c.showcase
+        SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, c.showcase
         FROM collection c JOIN books b ON c.bookID = b.bookID
         WHERE c.userID = ? AND (c.showcase = 1 OR ? = 'all')
         ORDER BY b.bookID DESC
@@ -49,6 +62,7 @@ include __DIR__ . '/../templates/top.php';
         <div class="profile-head__text">
             <h1><?= e($user['first_name'] . ' ' . $user['last_name']) ?></h1>
             <p class="muted">@<?= e($user['username']) ?></p>
+            <p class="rating-summary"><?= e(stars_label($user['ratingAverage'], $user['ratingCount'])) ?></p>
             <?php if (location_label($user) !== ''): ?>
                 <p class="muted book-card__where"><?= icon('pin') ?><?= e(location_label($user)) ?></p>
             <?php endif; ?>
@@ -63,6 +77,8 @@ include __DIR__ . '/../templates/top.php';
         </div>
         <?php if ($isOwn): ?>
             <a class="btn btn--ghost" href="/settings.php">Edit profile</a>
+        <?php elseif ($userID): ?>
+            <?= report_form('user', $profileID) ?>
         <?php endif; ?>
     </header>
 
@@ -95,5 +111,19 @@ include __DIR__ . '/../templates/top.php';
             } ?>
         </div>
     <?php endif; ?>
+<?php endif; ?>
+<?php if ($user && $ratings): ?>
+    <section class="section feedback">
+        <h2>Ratings</h2>
+        <ul class="feedback__list">
+            <?php foreach ($ratings as $rating): ?>
+                <li>
+                    <p><strong class="rating-summary"><?= str_repeat('★', (int) $rating['stars']) ?></strong> <span class="visually-hidden"><?= (int) $rating['stars'] ?> out of 5</span> by <a class="link" href="/profile.php?userID=<?= (int) $rating['raterID'] ?>"><?= e($rating['username']) ?></a></p>
+                    <?php if ($rating['comment']): ?><p><?= e($rating['comment']) ?></p><?php endif; ?>
+                    <?php if ($userID && !$isOwn && $rating['raterID'] != $userID): ?><?= report_form('rating', $rating['ratingID']) ?><?php endif; ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
 <?php endif; ?>
 <?php include __DIR__ . '/../templates/bottom.php'; ?>

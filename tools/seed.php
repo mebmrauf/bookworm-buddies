@@ -129,7 +129,7 @@ $userIDs = [];
 
 $conn->begin_transaction();
 
-$addUser = $conn->prepare("INSERT INTO users (username, password, email, first_name, last_name, date_of_birth, email_verified_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+$addUser = $conn->prepare("INSERT INTO users (username, password, email, first_name, last_name, date_of_birth, email_verified_at, rules_accepted_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
 $addBook = $conn->prepare("INSERT INTO books (title, author, year_published) VALUES (?, ?, ?)");
 $addCopy = $conn->prepare("INSERT INTO collection (userID, bookID, showcase) VALUES (?, ?, ?)");
 $addSwap = $conn->prepare("INSERT INTO swap (requesterID, ownerID, bookID, status) VALUES (?, ?, ?, ?)");
@@ -181,6 +181,9 @@ foreach ($feedback as [$title, $person, $comment, $reply]) {
 }
 
 $conn->query("UPDATE books SET handover = 'both' WHERE MOD(bookID, 3) = 0");
+$conn->query("UPDATE books b LEFT JOIN swap s ON s.activeBookID = b.bookID SET b.listing_type = 'give' WHERE MOD(b.bookID, 7) = 0 AND s.swapID IS NULL");
+$conn->query("UPDATE books b LEFT JOIN swap s ON s.activeBookID = b.bookID SET b.listing_type = 'swap' WHERE MOD(b.bookID, 5) = 0 AND b.listing_type = 'lend' AND s.swapID IS NULL");
+$conn->query("UPDATE swap SET due_date = CURDATE() + INTERVAL 10 DAY WHERE status = 'accepted'");
 $conn->commit();
 
 // Outside public/, so the passwords can't be downloaded from the website.

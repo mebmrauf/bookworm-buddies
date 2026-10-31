@@ -31,8 +31,15 @@ function db($sql, $types = '', ...$params) {
     return $stmt->get_result();
 }
 
+$logStart = (int) db("SELECT COALESCE(MAX(logID), 0) FROM admin_log")->fetch_row()[0];
+
 function cleanup() {
-    global $tag;
+    global $tag, $logStart, $adminServer;
+    if (!empty($adminServer)) {
+        proc_terminate($adminServer);
+    }
+    db("DELETE FROM admin_log WHERE logID > ?", 'i', $logStart);
+    db("DELETE FROM login_attempts WHERE username = 'admin'");
     $covers = db("SELECT b.cover_public_id FROM books b JOIN collection c ON b.bookID = c.bookID JOIN users u ON c.userID = u.userID WHERE u.username LIKE CONCAT(?, '%')", 's', $tag)->fetch_all();
     $avatars = db("SELECT avatar_public_id FROM users WHERE username LIKE CONCAT(?, '%')", 's', $tag)->fetch_all();
     delete_images(array_merge(array_column($covers, 0), array_column($avatars, 0)));
@@ -45,16 +52,18 @@ register_shutdown_function('cleanup');
 // A browser: keeps its own cookies and follows redirects.
 class Browser {
     private $jar;
+    private $site;
     public $code;
     public $url;
 
-    public function __construct() {
+    public function __construct($site = null) {
+        global $base;
         $this->jar = tempnam(sys_get_temp_dir(), 'bw');
+        $this->site = $site ?? $base;
     }
 
     private function request($path, $fields = null) {
-        global $base;
-        $ch = curl_init($base . '/' . $path);
+        $ch = curl_init($this->site . '/' . $path);
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_COOKIEJAR => $this->jar, CURLOPT_COOKIEFILE => $this->jar]);
         if ($fields !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($fields));
@@ -71,9 +80,8 @@ class Browser {
 
     // Multipart form with file uploads: $files maps field name => local path.
     public function upload($path, $fields, $files, $formPage) {
-        global $base;
         preg_match('/name="csrf" value="(\w+)"/', $this->get($formPage), $m);
-        $ch = curl_init($base . '/' . $path);
+        $ch = curl_init($this->site . '/' . $path);
         foreach ($files as $name => $file) {
             $fields[$name] = new CURLFile($file);
         }
@@ -105,7 +113,7 @@ function test_email($suffix) {
 function signup($browser, $suffix, $overrides = [], $activate = true) {
     global $tag;
     $email = $overrides['email'] ?? test_email($suffix);
-    $html = $browser->post('signup.php', $overrides + ['name' => 'Test User', 'email' => $email, 'password' => 'correct-horse-1'], 'signup.php');
+    $html = $browser->post('signup.php', $overrides + ['name' => 'Test User', 'email' => $email, 'password' => 'correct-horse-1', 'agree' => '1'], 'signup.php');
     if ($activate) {
         db("UPDATE users SET username = ?, email_verified_at = NOW() WHERE email = ?", 'ss', "$tag$suffix", $email);
     }
@@ -198,6 +206,10 @@ $carol = new Browser();
 
 $signupForm = $alice->get('signup.php');
 check('signup: asks only name, email and password', str_contains($signupForm, 'name="name"') && str_contains($signupForm, 'name="email"') && str_contains($signupForm, 'name="password"') && !str_contains($signupForm, 'name="username"') && !str_contains($signupForm, 'name="dob"'));
+check('signup: the rules checkbox is required', (bool) preg_match('/name="agree"[^>]* required/', $signupForm) && str_contains($signupForm, '/rules.php'));
+$refused = $alice->post('signup.php', ['name' => 'No Agree', 'email' => test_email('noagree'), 'password' => 'correct-horse-1'], 'signup.php');
+check('signup: refused without agreeing to the rules', str_contains($refused, 'agree to the community rules') && !db("SELECT 1 FROM users WHERE email = ?", 's', test_email('noagree'))->num_rows);
+check('rules: the page is public', str_contains($anon->get('rules.php'), 'Community rules') && $anon->code === 200);
 check('signup: rejects a short password', str_contains(signup($alice, 'a', ['password' => 'short'], false), 'Password must be'));
 check('signup: rejects a bad email', str_contains(signup($alice, 'a', ['email' => 'nope'], false), 'valid email'));
 check('signup: rejects a blank name', str_contains(signup($alice, 'a', ['name' => '  '], false), 'enter your name'));
@@ -209,6 +221,7 @@ check('signup: goes to the check-your-email page', str_ends_with($alice->url, 'v
 check('signup: splits the name, apostrophe included', $row['first_name'] === 'Test' && $row['last_name'] === "O'Brien");
 check('signup: a username is generated', (bool) preg_match('/^test\.o\.brien[0-9]*$/', $row['username']));
 check('signup: birth date is left empty', $row['date_of_birth'] === null);
+check('signup: the time of agreeing is recorded', db("SELECT rules_accepted_at FROM users WHERE userID = ?", 'i', $row['userID'])->fetch_row()[0] !== null);
 check('signup: Resend accepted the email over HTTPS', $row['verify_sent_at'] !== null);
 check('signup: the link is stored only as a hash', strlen((string) $row['verify_token_hash']) === 64);
 $hash = $row['password'];
@@ -664,6 +677,236 @@ if (cloudinary_enabled()) {
     echo "skip  Cloudinary uploads (no keys in config.php)\n";
     $imagesToGo = [];
 }
+
+// ---- Giveaways
+$addListed = function ($browser, $title, $type) {
+    $browser->post('add-book.php', ['title' => $title, 'author' => 'A', 'year_published' => '2000', 'listing_type' => $type, 'share' => '1'], 'add-book.php');
+    return db("SELECT bookID FROM books WHERE title = ? ORDER BY bookID DESC LIMIT 1", 's', $title)->fetch_row()[0];
+};
+$ownerOf = fn($id) => db("SELECT userID, showcase FROM collection WHERE bookID = ?", 'i', $id)->fetch_assoc();
+$swapRow = fn($id) => db("SELECT * FROM swap WHERE swapID = ?", 'i', $id)->fetch_assoc();
+
+$gift = $addListed($alice, "$tag gift", 'give');
+check('listing: the card shows the type', str_contains($bob->get('home.php?city=all&type=give'), 'Free to keep') && str_contains($bob->get('home.php?city=all&type=give'), "$tag gift"));
+check('listing: the type filter narrows results', !str_contains($bob->get('home.php?city=all&type=lend'), "$tag gift"));
+$bob->post('actions/swap-request.php', ['bookID' => $gift]);
+$giftSwap = latest_swap($gift);
+check('give: the request is a giveaway', $swapRow($giftSwap)['kind'] === 'give');
+$alice->post('actions/swap-update.php', ['swapID' => $giftSwap, 'action' => 'accept']);
+check('give: no return date is set', $swapRow($giftSwap)['status'] === 'accepted' && $swapRow($giftSwap)['due_date'] === null);
+$bob->post('actions/swap-update.php', ['swapID' => $giftSwap, 'action' => 'complete']);
+check('give: the receiver cannot complete it alone', $swapRow($giftSwap)['status'] === 'accepted' && $ownerOf($gift)['userID'] == $aliceID);
+$alice->post('actions/swap-update.php', ['swapID' => $giftSwap, 'action' => 'return']);
+check('give: it cannot be marked returned', $swapRow($giftSwap)['status'] === 'accepted');
+$alice->post('actions/swap-update.php', ['swapID' => $giftSwap, 'action' => 'complete']);
+check('give: completing moves the book to the receiver', $swapRow($giftSwap)['status'] === 'completed' && $ownerOf($gift) == ['userID' => $bobID, 'showcase' => 0]);
+check('give: the book is on the new owner\'s shelf', str_contains($bob->get('profile.php'), "$tag gift"));
+
+// ---- Two-way swaps
+$wanted = $addListed($alice, "$tag wanted", 'swap');
+$offer = $addListed($bob, "$tag offer", 'lend');
+$bobPrivate = add_book($bob, "$tag bobprivate", false);
+$page = $bob->get("book.php?id=$wanted");
+check('swap: the form offers your shared books only', str_contains($page, 'name="offeredID"') && str_contains($page, "$tag offer") && !str_contains($page, "$tag bobprivate"));
+$bob->post('actions/swap-request.php', ['bookID' => $wanted]);
+check('swap: a book must be offered', latest_swap($wanted) === null);
+$bob->post('actions/swap-request.php', ['bookID' => $wanted, 'offeredID' => $shown]);
+check('swap: you cannot offer someone else\'s book', latest_swap($wanted) === null);
+$bob->post('actions/swap-request.php', ['bookID' => $wanted, 'offeredID' => $bobPrivate]);
+check('swap: you cannot offer a private book', latest_swap($wanted) === null);
+$bob->post('actions/swap-request.php', ['bookID' => $wanted, 'offeredID' => $offer]);
+$twoWay = latest_swap($wanted);
+check('swap: the request records the offered book', $swapRow($twoWay)['kind'] === 'swap' && $swapRow($twoWay)['offered_bookID'] == $offer);
+check('swap: the owner sees what is offered', str_contains($alice->get('requests.php'), "$tag offer"));
+check('swap: an offered book shows as unavailable', str_contains($carol->get("book.php?id=$offer"), 'Not Available'));
+check('swap: an offered book leaves Available Books', !str_contains($carol->get('home.php?available=1&city=all'), "$tag offer"));
+$carol->post('actions/swap-request.php', ['bookID' => $offer]);
+check('swap: an offered book cannot be requested', latest_swap($offer) === null);
+$alice->post('actions/swap-update.php', ['swapID' => $twoWay, 'action' => 'accept']);
+$bob->post('actions/book-delete.php', ['bookID' => $offer]);
+check('swap: an offered book in an accepted swap cannot be deleted', db("SELECT 1 FROM books WHERE bookID = ?", 'i', $offer)->num_rows === 1);
+$carol->post('actions/swap-update.php', ['swapID' => $twoWay, 'action' => 'complete']);
+check('swap: a stranger cannot confirm', !$swapRow($twoWay)['owner_confirmed'] && !$swapRow($twoWay)['requester_confirmed']);
+$alice->post('actions/swap-update.php', ['swapID' => $twoWay, 'action' => 'complete']);
+check('swap: one confirmation changes nothing yet', $swapRow($twoWay)['status'] === 'accepted' && $ownerOf($wanted)['userID'] == $aliceID);
+$bob->post('actions/swap-update.php', ['swapID' => $twoWay, 'action' => 'complete']);
+check('swap: both confirmations exchange the books', $swapRow($twoWay)['status'] === 'completed' && $ownerOf($wanted) == ['userID' => $bobID, 'showcase' => 0] && $ownerOf($offer) == ['userID' => $aliceID, 'showcase' => 0]);
+
+// ---- Return dates and reminders
+$loan = $addListed($alice, "$tag loan", 'lend');
+$bob->post('actions/swap-request.php', ['bookID' => $loan]);
+$loanSwap = latest_swap($loan);
+$alice->post('actions/swap-update.php', ['swapID' => $loanSwap, 'action' => 'accept', 'due_date' => '2001-01-01']);
+check('due: a past date is refused', $swapRow($loanSwap)['status'] === 'pending');
+$alice->post('actions/swap-update.php', ['swapID' => $loanSwap, 'action' => 'accept', 'due_date' => date('Y-m-d', strtotime('+400 days'))]);
+check('due: a date too far ahead is refused', $swapRow($loanSwap)['status'] === 'pending');
+$dueDate = date('Y-m-d', strtotime('+20 days'));
+$alice->post('actions/swap-update.php', ['swapID' => $loanSwap, 'action' => 'accept', 'due_date' => $dueDate]);
+check('due: accepting saves the return date', $swapRow($loanSwap)['status'] === 'accepted' && $swapRow($loanSwap)['due_date'] === $dueDate);
+check('due: the borrower sees it', str_contains($bob->get('requests.php'), date('j F Y', strtotime($dueDate))));
+$bob->post('actions/swap-update.php', ['swapID' => $loanSwap, 'action' => 'extend', 'due_date' => date('Y-m-d', strtotime('+60 days'))]);
+check('due: the borrower cannot change it', $swapRow($loanSwap)['due_date'] === $dueDate);
+$alice->post('actions/swap-update.php', ['swapID' => $loanSwap, 'action' => 'extend', 'due_date' => date('Y-m-d', strtotime('+30 days'))]);
+check('due: the owner can change it', $swapRow($loanSwap)['due_date'] === date('Y-m-d', strtotime('+30 days')));
+db("UPDATE swap SET due_date = ? WHERE swapID = ?", 'si', date('Y-m-d', strtotime('-2 days')), $loanSwap);
+check('due: an overdue loan is marked', str_contains($bob->get('requests.php'), 'Overdue'));
+
+// A second copy of the site with a known admin login, so the suite never needs the real password.
+$adminPassword = bin2hex(random_bytes(12));
+$cronToken = bin2hex(random_bytes(16));
+$testConfig = tempnam(sys_get_temp_dir(), 'bw') . '.php';
+file_put_contents($testConfig, '<?php return array_merge(require ' . var_export(realpath(__DIR__ . '/../config.php'), true) . ", ['admin' => ['email' => 'admin@example.com', 'password_hash' => " . var_export(password_hash($adminPassword, PASSWORD_BCRYPT), true) . "], 'cron_token' => " . var_export($cronToken, true) . ']);');
+$adminPort = 18000 + random_int(0, 999);
+$adminSite = "http://localhost:$adminPort";
+$adminServer = proc_open([PHP_BINARY, '-S', "localhost:$adminPort", '-t', __DIR__ . '/../public'], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes, null, ['BOOKWORM_CONFIG' => $testConfig] + getenv());
+usleep(800000);
+
+$cron = new Browser($adminSite);
+$cron->get('cron.php?token=wrong');
+check('reminders: a wrong token is refused', $cron->code === 404);
+$reminded = json_decode($cron->get("cron.php?token=$cronToken"), true);
+check('reminders: an overdue loan gets a reminder', $cron->code === 200 && ($reminded['overdue'] ?? 0) >= 1 && $swapRow($loanSwap)['reminded_overdue_at'] !== null);
+$overdueAt = $swapRow($loanSwap)['reminded_overdue_at'];
+$cron->get("cron.php?token=$cronToken");
+check('reminders: it is not repeated the same day', $swapRow($loanSwap)['reminded_overdue_at'] === $overdueAt);
+db("UPDATE swap SET due_date = ?, reminded_overdue_at = NULL WHERE swapID = ?", 'si', date('Y-m-d', strtotime('+2 days')), $loanSwap);
+$cron->get("cron.php?token=$cronToken");
+check('reminders: a loan due soon gets a reminder', $swapRow($loanSwap)['reminded_due_at'] !== null);
+db("UPDATE swap SET reminded_due_at = NULL, due_date = ? WHERE swapID = ?", 'si', date('Y-m-d', strtotime('+25 days')), $loanSwap);
+$cron->get("cron.php?token=$cronToken");
+check('reminders: a far-off date gets none', $swapRow($loanSwap)['reminded_due_at'] === null);
+
+// ---- Ratings
+$rate = fn($browser, $swapID, $stars, $comment = '') => $browser->post('actions/rate.php', ['swapID' => $swapID, 'stars' => $stars, 'comment' => $comment]);
+$countRatings = fn($swapID) => db("SELECT COUNT(*) FROM ratings WHERE swapID = ?", 'i', $swapID)->fetch_row()[0];
+$rate($bob, $loanSwap, 5);
+check('rating: not allowed before the exchange ends', $countRatings($loanSwap) == 0);
+$alice->post('actions/swap-update.php', ['swapID' => $loanSwap, 'action' => 'return']);
+check('rating: the form appears afterwards', str_contains($bob->get('requests.php'), 'actions/rate.php'));
+$rate($carol, $loanSwap, 1);
+check('rating: a stranger cannot rate', $countRatings($loanSwap) == 0);
+$rate($bob, $loanSwap, 6);
+$rate($bob, $loanSwap, 0);
+check('rating: stars must be 1 to 5', $countRatings($loanSwap) == 0);
+$ratingText = "Great <b>owner</b> $tag";
+$rate($bob, $loanSwap, 4, $ratingText);
+$ratingRow = db("SELECT ratingID, raterID, ratedID, stars FROM ratings WHERE swapID = ?", 'i', $loanSwap)->fetch_assoc();
+check('rating: goes to the other person', $ratingRow['raterID'] == $bobID && $ratingRow['ratedID'] == $aliceID && $ratingRow['stars'] == 4);
+$rate($bob, $loanSwap, 1);
+check('rating: only once per exchange', db("SELECT stars FROM ratings WHERE swapID = ? AND raterID = ?", 'ii', $loanSwap, $bobID)->fetch_row()[0] == 4);
+$profilePage = $carol->get("profile.php?userID=$aliceID");
+check('rating: the profile shows it, escaped', str_contains($profilePage, '★ 4.0 (1 rating)') && str_contains($profilePage, htmlspecialchars($ratingText)) && !str_contains($profilePage, '<b>owner'));
+check('rating: the book page shows the owner\'s score', str_contains($carol->get("book.php?id=$shown"), '★ 4.0'));
+$rate($alice, $loanSwap, 5, 'Returned on time');
+check('rating: both people can rate', $countRatings($loanSwap) == 2);
+
+// ---- Reports
+$report = fn($browser, $type, $id, $reason = 'Spam or fake') => $browser->post('actions/report.php', ['type' => $type, 'id' => $id, 'reason' => $reason, 'details' => 'test']);
+$countReports = fn($type, $id) => db("SELECT COUNT(*) FROM reports WHERE target_type = ? AND target_id = ?", 'si', $type, $id)->fetch_row()[0];
+check('report: the link shows on a book', str_contains($carol->get("book.php?id=$shown"), 'actions/report.php'));
+$anonReport = new Browser();
+$anonReport->rawPost('actions/report.php', ['type' => 'book', 'id' => $shown, 'reason' => 'Copyright']);
+check('report: guests cannot report', str_ends_with($anonReport->url, 'signin.php') && $countReports('book', $shown) == 0);
+$report($carol, 'book', $shown, 'Not a real reason');
+check('report: a made-up reason is refused', $countReports('book', $shown) == 0);
+$report($carol, 'book', 999999999);
+check('report: a missing target is refused', $countReports('book', 999999999) == 0);
+$report($carol, 'book', $shown);
+$report($carol, 'book', $shown);
+check('report: repeats are ignored', $countReports('book', $shown) == 1);
+$report($carol, 'user', $carolID);
+check('report: you cannot report yourself', $countReports('user', $carolID) == 0);
+$report($carol, 'rating', $ratingRow['ratingID']);
+
+// ---- Admin
+$admin = new Browser($adminSite);
+if (empty(config('admin')['email'])) {
+    $plain = new Browser();
+    $plain->get('admin/index.php');
+    check('admin: without admin config, the area does not exist', $plain->code === 404);
+}
+foreach (['index.php', 'users.php', 'books.php', 'reports.php', 'content.php', 'log.php'] as $page) {
+    $admin->get("admin/$page");
+    check("admin: $page needs a login", str_ends_with($admin->url, 'admin/login.php'));
+}
+$adminAsUser = new Browser($adminSite);
+$adminAsUser->post('actions/signin.php', ['login' => "{$tag}c", 'password' => 'correct-horse-1'], 'signin.php');
+$adminAsUser->get('admin/users.php');
+check('admin: a normal member cannot get in', str_ends_with($adminAsUser->url, 'admin/login.php'));
+$loginAdmin = fn($browser, $email, $password) => $browser->post('admin/login.php', ['email' => $email, 'password' => $password], 'admin/login.php');
+check('admin: a wrong password is refused', str_contains($loginAdmin($admin, 'admin@example.com', 'wrong-password'), 'Invalid email or password'));
+check('admin: a wrong email is refused', str_contains($loginAdmin($admin, 'other@example.com', $adminPassword), 'Invalid email or password'));
+$loginAdmin($admin, 'ADMIN@example.com', $adminPassword);
+check('admin: the right login works', str_ends_with($admin->url, 'admin/index.php'));
+foreach (['index.php', 'users.php', 'books.php', 'reports.php', 'content.php', 'log.php', 'users.php?q=' . urlencode("' OR 1=1 -- "), 'books.php?status=removed', 'users.php?status=suspended&page=2'] as $page) {
+    $html = $admin->get("admin/$page");
+    check("admin: $page renders", $admin->code === 200 && !preg_match('/Warning|Fatal error|Something went wrong/', $html));
+}
+$usersPage = $admin->get('admin/users.php?q=' . urlencode($tag));
+check('admin: finds users', str_contains($usersPage, "{$tag}b"));
+check('admin: never shows mobile, address or birth date', !str_contains($usersPage, '+880') && !str_contains($usersPage, 'Requester Road') && !str_contains($usersPage, '2000-01-15') && !str_contains($usersPage, '$2y$'));
+check('admin: reports appear in the queue', str_contains($admin->get('admin/reports.php'), "$tag shown"));
+
+$adminDo = fn($do, $id, $reason = '') => $admin->post('admin/action.php', ['do' => $do, 'id' => $id, 'reason' => $reason], 'admin/index.php');
+$admin->get("admin/action.php?do=suspend&id=$carolID&reason=x");
+check('admin: a plain link changes nothing', db("SELECT suspended_at FROM users WHERE userID = ?", 'i', $carolID)->fetch_row()[0] === null);
+$admin->rawPost('admin/action.php', ['do' => 'suspend', 'id' => $carolID, 'reason' => 'x', 'csrf' => 'forged']);
+check('admin: a forged form changes nothing', db("SELECT suspended_at FROM users WHERE userID = ?", 'i', $carolID)->fetch_row()[0] === null);
+$outsider = new Browser($adminSite);
+$outsider->rawPost('admin/action.php', ['do' => 'suspend', 'id' => $carolID, 'reason' => 'x']);
+check('admin: actions need a login', db("SELECT suspended_at FROM users WHERE userID = ?", 'i', $carolID)->fetch_row()[0] === null);
+$adminDo('suspend', $carolID);
+check('admin: suspending needs a reason', db("SELECT suspended_at FROM users WHERE userID = ?", 'i', $carolID)->fetch_row()[0] === null);
+
+// Suspension: Carol shares a book and has a pending request on Bob's.
+$carolBook = $addListed($carol, "$tag carolbook", 'lend');
+$bobLend = $addListed($bob, "$tag boblend", 'lend');
+$carol->post('actions/swap-request.php', ['bookID' => $bobLend]);
+$carolSwap = latest_swap($bobLend);
+$adminDo('suspend', $carolID, 'Repeated spam');
+check('suspend: the session ends at once', str_ends_with(($carol->get('requests.php') !== false ? $carol->url : ''), 'signin.php'));
+check('suspend: sign-in is refused with the reason', str_contains(signin($carol, 'c'), 'Repeated spam') && !str_ends_with($carol->url, 'home.php'));
+check('suspend: open requests are closed', $swapRow($carolSwap)['status'] === 'declined');
+check('suspend: their books leave Browse', !str_contains($bob->get('home.php?city=all'), "$tag carolbook"));
+$bob->get("book.php?id=$carolBook");
+check('suspend: their book page is hidden', $bob->code === 404);
+check('suspend: their profile is hidden', str_contains($bob->get("profile.php?userID=$carolID"), 'User not found'));
+check('suspend: they leave live search', $suggest($bob, "$tag carolbook")['books'] === [] && $suggest($bob, "{$tag}c")['people'] === []);
+$bob->post('actions/swap-request.php', ['bookID' => $carolBook]);
+check('suspend: their book cannot be requested', latest_swap($carolBook) === null);
+$adminDo('unsuspend', $carolID);
+signin($carol, 'c');
+check('unsuspend: they can sign in again', str_ends_with($carol->url, 'home.php'));
+check('unsuspend: their books return', str_contains($bob->get('home.php?city=all'), "$tag carolbook"));
+
+// Books and comments.
+$adminDo('takedown', $carolBook, 'Not a real book');
+check('takedown: hidden from others', str_contains($carol->get("book.php?id=$carolBook"), 'Not a real book') && db("SELECT showcase FROM collection WHERE bookID = ?", 'i', $carolBook)->fetch_row()[0] == 0);
+$carol->post('actions/book-showcase.php', ['bookID' => $carolBook, 'showcase' => '1']);
+check('takedown: the owner cannot re-share it', db("SELECT showcase FROM collection WHERE bookID = ?", 'i', $carolBook)->fetch_row()[0] == 0);
+$adminDo('restore', $carolBook);
+$carol->post('actions/book-showcase.php', ['bookID' => $carolBook, 'showcase' => '1']);
+check('restore: the owner can share it again', db("SELECT showcase FROM collection WHERE bookID = ?", 'i', $carolBook)->fetch_row()[0] == 1);
+$bob->post('actions/feedback-add.php', ['bookID' => $carolBook, 'comment' => "abusive $tag"]);
+$feedbackID = db("SELECT feedbackID FROM feedback WHERE bookID = ?", 'i', $carolBook)->fetch_row()[0];
+check('admin: comments are listed', str_contains($admin->get('admin/content.php'), "abusive $tag"));
+$adminDo('delete_feedback', $feedbackID);
+check('admin: can delete feedback', db("SELECT 1 FROM feedback WHERE feedbackID = ?", 'i', $feedbackID)->num_rows === 0);
+$adminDo('delete_rating', $ratingRow['ratingID']);
+check('admin: can delete a rating', db("SELECT 1 FROM ratings WHERE ratingID = ?", 'i', $ratingRow['ratingID'])->num_rows === 0);
+$reportID = db("SELECT reportID FROM reports WHERE target_type = 'book' AND target_id = ?", 'i', $shown)->fetch_row()[0];
+$adminDo('resolve_report', $reportID);
+check('admin: can close a report', db("SELECT status FROM reports WHERE reportID = ?", 'i', $reportID)->fetch_row()[0] === 'resolved' && !str_contains($admin->get('admin/reports.php'), "$tag shown"));
+$logPage = $admin->get('admin/log.php');
+check('admin: actions are logged with reasons', str_contains($logPage, 'suspend') && str_contains($logPage, 'Repeated spam') && str_contains($logPage, 'takedown'));
+$admin->post('admin/action.php', ['do' => 'logout'], 'admin/index.php');
+$admin->get('admin/users.php');
+check('admin: logging out ends access', str_ends_with($admin->url, 'admin/login.php'));
+for ($i = 0; $i < 5; $i++) {
+    $loginAdmin($admin, 'admin@example.com', 'wrong-password');
+}
+check('admin: login is blocked after 5 failures', str_contains($loginAdmin($admin, 'admin@example.com', $adminPassword), 'Too many failed attempts'));
+db("DELETE FROM login_attempts WHERE username = 'admin'");
 
 // ---- Pages render cleanly
 foreach (['home.php', 'home.php?available=1', 'requests.php', 'add-book.php', 'profile.php', 'profile.php?show=showcased', 'profile.php?show=borrowed', 'profile.php?show[]=x', 'profile.php?userID=999999999', 'settings.php', 'search.php', 'search.php?q[]=x'] as $page) {

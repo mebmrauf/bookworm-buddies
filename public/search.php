@@ -7,11 +7,11 @@ $pattern = like_pattern($q);
 $books = $people = null;
 if ($q !== '') {
     $books = run("
-        SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, u.userID AS ownerID, u.username, u.city, u.area
+        SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, u.userID AS ownerID, u.username, u.city, u.area
         FROM books b
         JOIN collection c ON b.bookID = c.bookID
         JOIN users u ON c.userID = u.userID
-        WHERE (b.title LIKE ? OR b.author LIKE ?) AND (c.showcase = 1 OR c.userID = ?)
+        WHERE (b.title LIKE ? OR b.author LIKE ?) AND ((" . VISIBLE_BOOK . ") OR c.userID = ?)
         ORDER BY b.title
     ", 'ssi', $pattern, $pattern, $userID)->get_result();
 
@@ -19,7 +19,7 @@ if ($q !== '') {
     $people = !$userID ? null : run("
         SELECT userID, username, first_name, last_name, avatar_public_id
         FROM users
-        WHERE username LIKE ? OR first_name LIKE ? OR last_name LIKE ?
+        WHERE suspended_at IS NULL AND (username LIKE ? OR first_name LIKE ? OR last_name LIKE ?)
         ORDER BY first_name
     ", 'sss', $pattern, $pattern, $pattern)->get_result();
 }

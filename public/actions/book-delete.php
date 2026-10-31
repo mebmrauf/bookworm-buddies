@@ -14,9 +14,9 @@ if (!$book) {
     flash('You cannot delete that book.', '/profile.php');
 }
 
-$lent = run("SELECT 1 FROM swap WHERE bookID = ? AND status = 'accepted'", 'i', $bookID)->get_result()->num_rows;
+$lent = run("SELECT 1 FROM swap WHERE (bookID = ? OR offered_bookID = ?) AND status = 'accepted'", 'ii', $bookID, $bookID)->get_result()->num_rows;
 if ($lent) {
-    flash('That book is lent out. Mark it as returned before deleting it.', "/book.php?id=$bookID");
+    flash('That book is in an accepted swap. Finish the swap before deleting it.', "/book.php?id=$bookID");
 }
 
 // collection, swap and feedback rows go with it (ON DELETE CASCADE).
