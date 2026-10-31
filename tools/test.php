@@ -14,6 +14,7 @@ if ($realServices) {
 }
 require __DIR__ . '/../src/db.php';
 require __DIR__ . '/../src/cloudinary.php';
+require __DIR__ . '/../src/validation.php';
 
 if (!str_ends_with(config('database'), '_test')) {
     exit("Refusing to run: the tests create and delete data, so they need a database named *_test.\n");
@@ -206,7 +207,7 @@ check('pwa: pages link the manifest and icons', str_contains($home, 'rel="manife
 db("INSERT INTO users (username, password, email, first_name, last_name, city, area, email_verified_at, rules_accepted_at) VALUES (?, 'x', ?, 'Sample', 'Owner', 'Sylhet', 'Zindabazar', NOW(), NOW())", 'ss', "{$tag}sample", "$tag-sample@example.com");
 $sampleOwner = $conn->insert_id;
 db("INSERT INTO books (title, author, year_published, cover_public_id) VALUES (?, 'Sample Author', 2000, 'sample')", 's', "$tag sample book");
-db("INSERT INTO collection (userID, bookID, showcase, city) VALUES (?, ?, 1, 'Sylhet')", 'ii', $sampleOwner, $conn->insert_id);
+db("INSERT INTO collection (userID, bookID, showcase, city, book_key) VALUES (?, ?, 1, 'Sylhet', ?)", 'iis', $sampleOwner, $conn->insert_id, book_key("$tag sample book", 'Sample Author'));
 
 // ---- Guests can look around
 $html = $anon->get('');
@@ -891,6 +892,61 @@ if ($anyPost) {
 }
 check('sign-in text: differs from signup', str_contains($anon->get('signin.php'), 'Your next chapter') && str_contains($anon->get('signup.php'), 'to stay on one shelf'));
 check('password fields: sign-in and signup can show the password', str_contains($anon->get('signin.php'), 'data-password-toggle') && str_contains($anon->get('signup.php'), 'data-password-toggle'));
+
+// Requests and owner ratings on Browse.
+$sampleBook = db("SELECT bookID FROM books WHERE title = ?", 's', "$tag sample book")->fetch_row()[0];
+$fan = new Browser();
+signup($fan, 'fan');
+signin($fan, 'fan');
+$fan->post('actions/swap-request.php', ['bookID' => $sampleBook]);
+check('requests: a request is counted', db("SELECT request_count FROM collection WHERE bookID = ?", 'i', $sampleBook)->fetch_row()[0] === 1);
+$fanSwap = db("SELECT swapID FROM swap WHERE bookID = ? AND requesterID = ?", 'ii', $sampleBook, user_id('fan'))->fetch_row()[0];
+$fan->post('actions/swap-update.php', ['swapID' => $fanSwap, 'action' => 'cancel']);
+$fan->post('actions/swap-request.php', ['bookID' => $sampleBook]);
+check('requests: cancelling and asking again counts once', db("SELECT request_count FROM collection WHERE bookID = ?", 'i', $sampleBook)->fetch_row()[0] === 1);
+// Other checks request books too, so give this one a clear lead.
+db("UPDATE collection SET request_count = 50 WHERE bookID = ?", 'i', $sampleBook);
+$byRequests = $anon->get('home.php?city=all&sort=requested');
+preg_match_all('/book-card__title">([^<]*)/', $byRequests, $titles);
+check('requests: the most requested book comes first', ($titles[1][0] ?? '') === "$tag sample book" && str_contains($byRequests, 'Requested by 50 readers'));
+check('requests: the newest order still works', $anon->code === 200 && str_contains($anon->get('home.php?city=all'), 'book-card__title'));
+check('requests: a crafted count is harmless', $anon->get("home.php?city=all&sort=requested&before=999999&value=abc") !== '' && $anon->code === 200);
+db("INSERT INTO swap (requesterID, ownerID, bookID, status) VALUES (?, ?, ?, 'completed')", 'iii', user_id('fan'), $sampleOwner, $sampleBook);
+db("INSERT INTO ratings (swapID, raterID, ratedID, stars) VALUES (?, ?, ?, 4)", 'iii', $conn->insert_id, user_id('fan'), $sampleOwner);
+check('owner rating: shown on the book card', str_contains($anon->get('home.php?city=Sylhet'), '★ 4.0 (1)'));
+
+// Rating books.
+check('book key: one book however it is typed', book_key('The Hobbit', 'J.R.R. Tolkien') === book_key('Hobbit: There and Back Again', 'JRR Tolkien') && book_key('Dune', 'Frank Herbert') !== book_key('Dune Messiah', 'Frank Herbert'));
+$sampleURL = "book.php?id=$sampleBook";
+check('book rating: guests are asked to sign in', str_contains($anon->get($sampleURL), 'to rate this book'));
+$anon->rawPost('actions/book-rate.php', ['bookID' => $sampleBook, 'stars' => 5]);
+check('book rating: guests cannot rate', !db("SELECT 1 FROM book_ratings r JOIN collection c ON c.book_key = r.book_key WHERE c.bookID = ?", 'i', $sampleBook)->num_rows);
+$fan->post('actions/book-rate.php', ['bookID' => $sampleBook, 'stars' => 9], $sampleURL);
+check('book rating: a bad value is refused', db("SELECT rating_count FROM collection WHERE bookID = ?", 'i', $sampleBook)->fetch_row()[0] === 0);
+$fan->post('actions/book-rate.php', ['bookID' => $sampleBook, 'stars' => 5], $sampleURL);
+$fan->post('actions/book-rate.php', ['bookID' => $sampleBook, 'stars' => 3], $sampleURL);
+$saved = db("SELECT rating_count, rating_avg, rating_rank FROM collection WHERE bookID = ?", 'i', $sampleBook)->fetch_row();
+check('book rating: one per reader, and it can change', $saved[0] === 1 && (float) $saved[1] === 3.0);
+check('book rating: too few ratings do not rank', (float) $saved[2] === 0.0);
+check('book rating: shown on the book page', str_contains($anon->get($sampleURL), '★ 3.0 (1 rating'));
+$aCopyOwner = user_id('fan');
+$fan->post('add-book.php', ['title' => "$tag sample book", 'author' => 'Sample Author', 'year_published' => 2001, 'handover' => 'meet', 'listing_type' => 'lend', 'share' => '1'], 'add-book.php');
+check('book rating: a new copy gets the same rating', db("SELECT c.rating_count FROM collection c JOIN books b ON b.bookID = c.bookID WHERE b.title = ? AND c.userID = ?", 'si', "$tag sample book", $aCopyOwner)->fetch_row()[0] === 1);
+$sampleKey = book_key("$tag sample book", 'Sample Author');
+foreach (['gu1', 'gu2', 'gu3', 'gu4'] as $i => $suffix) {
+    $rater = new Browser();
+    signup($rater, $suffix);
+    signin($rater, $suffix);
+    $rater->post('actions/book-rate.php', ['bookID' => $sampleBook, 'stars' => 5], $sampleURL);
+}
+$saved = db("SELECT rating_count, rating_rank FROM collection WHERE bookID = ?", 'i', $sampleBook)->fetch_row();
+check('book rating: five ratings earn a rank', $saved[0] === 5 && (float) $saved[1] === 4.6);
+$topRated = $anon->get('home.php?city=all&sort=rated');
+preg_match_all('/book-card__title">([^<]*)/', $topRated, $titles);
+check('top rated: the ranked book comes first', ($titles[1][0] ?? '') === "$tag sample book" && str_contains($topRated, '★ 4.6 (5)'));
+check('top rated: a crafted value is harmless', $anon->get('home.php?city=all&sort=rated&before=999999&value=x') !== '' && $anon->code === 200);
+$rater->post('actions/account-delete.php', ['password' => 'correct-horse-1'], 'settings.php');
+check('book rating: a deleted account stops counting', db("SELECT rating_count FROM collection WHERE bookID = ?", 'i', $sampleBook)->fetch_row()[0] === 4);
 
 // Forgotten passwords.
 $forgetful = new Browser();

@@ -44,6 +44,10 @@ $feedback = run("
     LIMIT 100
 ", 'i', $bookID)->get_result();
 
+$bookKey = book_key($book['title'], $book['author']);
+[$readerRatings, $readerAverage] = run("SELECT COUNT(*), AVG(stars) FROM book_ratings WHERE book_key = ?", 's', $bookKey)->get_result()->fetch_row();
+$myRating = $userID ? (int) (run("SELECT stars FROM book_ratings WHERE book_key = ? AND userID = ?", 'si', $bookKey, $userID)->get_result()->fetch_row()[0] ?? 0) : 0;
+
 $myAddress = current_user()['address'] ?? null;
 $isBusy = $book['swapStatus'] || $book['offeredElsewhere'];
 
@@ -68,6 +72,25 @@ include __DIR__ . '/../templates/top.php';
         <?php if ($book['cover_credit'] === 'Open Library'): ?>
             <p class="help">Cover image from <a class="link" href="https://openlibrary.org/" rel="noopener">Open Library</a></p>
         <?php endif; ?>
+
+        <section class="book-rating" id="rating">
+            <p><span class="rating-summary"><?= e(stars_label($readerAverage, $readerRatings)) ?></span> <span class="muted">from readers</span></p>
+            <?php if ($userID): ?>
+                <form class="book-rating__form" action="/actions/book-rate.php" method="post">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="bookID" value="<?= $bookID ?>">
+                    <fieldset class="star-choice">
+                        <legend><?= $myRating ? 'Your rating' : 'Read it? Rate this book' ?></legend>
+                        <?php for ($stars = 1; $stars <= 5; $stars++): ?>
+                            <label><input class="visually-hidden" type="radio" name="stars" value="<?= $stars ?>"<?= $stars === $myRating ? ' checked' : '' ?> required><span aria-hidden="true">★</span><span class="visually-hidden"><?= $stars ?> <?= $stars === 1 ? 'star' : 'stars' ?></span></label>
+                        <?php endfor; ?>
+                    </fieldset>
+                    <button type="submit" class="btn btn--ghost"><?= $myRating ? 'Update' : 'Save rating' ?></button>
+                </form>
+            <?php else: ?>
+                <p class="muted"><a class="link" href="/signin.php?next=<?= urlencode("/book.php?id=$bookID") ?>">Sign in</a> to rate this book.</p>
+            <?php endif; ?>
+        </section>
 
         <a class="person" href="/profile.php?userID=<?= (int) $book['ownerID'] ?>">
             <?= avatar($book, 40) ?>

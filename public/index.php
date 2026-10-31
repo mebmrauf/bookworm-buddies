@@ -10,8 +10,8 @@ const HERO_BOOKS = [42, 41, 40, 38];
 
 // Looks through a fixed window of the newest books, so the home page costs the same at any size.
 $books = run("
-    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, u.username, u.userID AS ownerID, u.city, u.area
-    FROM (SELECT bookID, userID FROM collection FORCE INDEX (browse_all) WHERE showcase = 1 ORDER BY bookID DESC LIMIT " . HIGHLIGHT_WINDOW . ") c
+    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, c.rating_avg, c.rating_count, u.username, u.userID AS ownerID, u.city, u.area
+    FROM (SELECT bookID, userID, rating_avg, rating_count FROM collection FORCE INDEX (browse_all) WHERE showcase = 1 ORDER BY bookID DESC LIMIT " . HIGHLIGHT_WINDOW . ") c
     STRAIGHT_JOIN books b ON c.bookID = b.bookID
     STRAIGHT_JOIN users u ON c.userID = u.userID
     WHERE u.suspended_at IS NULL AND b.cover_public_id IS NOT NULL
@@ -74,6 +74,7 @@ include __DIR__ . '/../templates/top.php';
         <a class="link" href="/home.php">See all books</a>
     </div>
     <div class="book-grid">
+        <?php $ownerRatings = owner_ratings($books); ?>
         <?php foreach ($books as $book) {
             include __DIR__ . '/../templates/book-card.php';
         } ?>

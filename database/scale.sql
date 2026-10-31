@@ -12,3 +12,10 @@ ALTER TABLE reports ADD INDEX target (target_type, target_id);
 ALTER TABLE books ADD INDEX by_title (title(100));
 ALTER TABLE books ADD FULLTEXT INDEX book_search (title, author);
 ALTER TABLE users ADD FULLTEXT INDEX people_search (username, first_name, last_name);
+
+ALTER TABLE collection
+    ADD INDEX requested_all (showcase, request_count, bookID),
+    ADD INDEX requested_city (showcase, city, request_count, bookID),
+    ADD INDEX rated_all (showcase, rating_rank, bookID),
+    ADD INDEX rated_city (showcase, city, rating_rank, bookID),
+    ADD INDEX book_key (book_key);

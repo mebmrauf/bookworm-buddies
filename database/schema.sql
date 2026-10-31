@@ -43,6 +43,13 @@ CREATE TABLE collection (
     bookID INT NOT NULL UNIQUE,
     showcase BOOLEAN NOT NULL DEFAULT 0,
     city VARCHAR(40),
+    -- How many different readers have asked for this book. Stored, so sorting by it doesn't count on every visit.
+    request_count INT NOT NULL DEFAULT 0,
+    -- Identifies the book across copies, with its rating copied here so Browse can sort without adding ratings up.
+    book_key CHAR(32),
+    rating_count INT NOT NULL DEFAULT 0,
+    rating_avg DECIMAL(3,2) NOT NULL DEFAULT 0,
+    rating_rank DECIMAL(3,2) NOT NULL DEFAULT 0,
     FOREIGN KEY (userID) REFERENCES users(userID) ON DELETE CASCADE,
     FOREIGN KEY (bookID) REFERENCES books(bookID) ON DELETE CASCADE
 );
@@ -90,6 +97,17 @@ CREATE TABLE rate_limits (
     hit_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX lookup (hit_key, hit_at),
     INDEX expiry (hit_at)
+);
+
+-- One rating per reader per book, shared by every copy of that book.
+CREATE TABLE book_ratings (
+    book_key CHAR(32) NOT NULL,
+    userID INT NOT NULL,
+    stars TINYINT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (book_key, userID),
+    CHECK (stars BETWEEN 1 AND 5),
+    FOREIGN KEY (userID) REFERENCES users(userID) ON DELETE CASCADE
 );
 
 CREATE TABLE ratings (

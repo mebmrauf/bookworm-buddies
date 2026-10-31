@@ -8,7 +8,8 @@ const SEARCH_PEOPLE_LIMIT = 12;
 $q = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
 $books = $people = null;
 if ($q !== '') {
-    $books = search_books($q, $userID, SEARCH_PAGE_LIMIT);
+    $books = search_books($q, $userID, SEARCH_PAGE_LIMIT)->fetch_all(MYSQLI_ASSOC);
+    $ownerRatings = owner_ratings($books);
     // Finding people is for members, so names can't be scraped by anyone passing by.
     $people = $userID ? search_people($q, SEARCH_PEOPLE_LIMIT) : null;
 }
@@ -43,18 +44,18 @@ include __DIR__ . '/../templates/top.php';
         </section>
     <?php endif; ?>
 
-    <?php if ($books->num_rows > 0): ?>
+    <?php if ($books): ?>
         <section class="section">
             <h2>Books</h2>
             <div class="book-grid">
-                <?php while ($book = $books->fetch_assoc()) {
+                <?php foreach ($books as $book) {
                     include __DIR__ . '/../templates/book-card.php';
                 } ?>
             </div>
         </section>
     <?php endif; ?>
 
-    <?php if ($books->num_rows === 0 && (!$people || $people->num_rows === 0)): ?>
+    <?php if (count($books) === 0 && (!$people || $people->num_rows === 0)): ?>
         <div class="empty">
             <h2>Nothing found</h2>
             <p class="muted">Try a different title, author or name.</p>

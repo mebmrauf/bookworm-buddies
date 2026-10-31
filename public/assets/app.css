@@ -566,13 +566,17 @@ html.is-loading button[aria-busy="true"] { opacity: 0.7; cursor: progress; }
 }
 
 .filters__city {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--muted);
 }
 
-.filters__city select { width: auto; min-width: 150px; }
+.filters__city select { flex: 1 1 130px; width: auto; min-width: 0; max-width: 100%; }
+@media (min-width: 960px) {
+  .filters__city select { flex: none; min-width: 150px; }
+}
 
 .book-facts {
   display: flex;
@@ -976,6 +980,9 @@ html.is-loading button[aria-busy="true"] { opacity: 0.7; cursor: progress; }
 /* Ratings and reports */
 
 .rating-summary { color: var(--warn); font-weight: 600; }
+
+.book-rating { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 18px; padding: 14px 0; border-block: 1px solid var(--line); }
+.book-rating__form { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
 
 .star-choice {
   display: flex;

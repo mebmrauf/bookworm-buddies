@@ -35,6 +35,8 @@ const DUPLICATE_KEY = 1062;
 const SEARCH_CANDIDATES = 500;
 // How many of the newest books or posts are considered for home-page style highlights.
 const HIGHLIGHT_WINDOW = 500;
+// Below this, one or two 5-star ratings could put a book at the top of Top rated.
+const BOOK_RATINGS_TO_RANK = 5;
 const FULLTEXT_MIN_WORD = 3;
 // MySQL doesn't index these, so requiring one would make every search for it come back empty.
 const FULLTEXT_STOPWORDS = ['about', 'are', 'com', 'for', 'from', 'how', 'that', 'the', 'this', 'was', 'what', 'when', 'where', 'who', 'will', 'with', 'und', 'www'];
@@ -80,6 +82,23 @@ function current_password_ok($given, $hash) {
 function signin_limit_keys($login, $ip) {
     $login = md5(strtolower($login));
     return ['pair' => "signin:pair:$login:" . md5($ip), 'account' => "signin:account:$login"];
+}
+
+// Copies a book's rating onto each copy, so Browse can sort and show it without adding up ratings on every visit.
+function refresh_book_rating($key) {
+    [$count, $average] = run("SELECT COUNT(*), COALESCE(AVG(stars), 0) FROM book_ratings WHERE book_key = ?", 's', $key)->get_result()->fetch_row();
+    run(
+        "UPDATE collection SET rating_count = ?, rating_avg = ?, rating_rank = ? WHERE book_key = ?",
+        'isss', $count, $average, $count >= BOOK_RATINGS_TO_RANK ? $average : 0, $key
+    );
+}
+
+// Call after a book is added or its title or author changes.
+function link_book_rating($bookID) {
+    $book = run("SELECT title, author FROM books WHERE bookID = ?", 'i', $bookID)->get_result()->fetch_assoc();
+    $key = book_key($book['title'], $book['author']);
+    run("UPDATE collection SET book_key = ? WHERE bookID = ?", 'si', $key, $bookID);
+    refresh_book_rating($key);
 }
 
 function password_session_check($hash) {

@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/bootstrap.php';
 
-const POLICIES_UPDATED = '31 October 2026';
+const POLICIES_UPDATED = '1 November 2026';
 
 $contact = config('contact_email');
 $contactLink = $contact ? '<a class="link" href="mailto:' . e($contact) . '">' . e($contact) . '</a>' : 'the site owner';
@@ -38,7 +38,7 @@ include __DIR__ . '/../templates/top.php';
     <ul>
         <li>Use your own email address, and only keep one account.</li>
         <li>Only list books you own and can really hand over, and describe them truthfully.</li>
-        <li>Only give ratings for exchanges that really happened, and say what really happened.</li>
+        <li>Only rate exchanges that really happened and books you've really read, and say what you honestly think.</li>
     </ul>
     <h3>Keep your word</h3>
     <ul>
@@ -101,7 +101,7 @@ include __DIR__ . '/../templates/top.php';
     </ul>
 
     <h3>Asking us to look again</h3>
-    <p>If you think we got it wrong, email <?= $contactLink ?> from your account's email address. We'll look at it again, but this is a hobby project, so a reply can take time. If we lift a suspension, your account and books come back as they were, apart from any requests that were closed.</p>
+    <p>If you think we got it wrong, <a class="link" href="#contact">contact us</a> from your account's email address. We'll look at it again, but this is a hobby project, so a reply can take time. If we lift a suspension, your account and books come back as they were, apart from any requests that were closed.</p>
 
     <h2 id="blog">Blog posts</h2>
     <ul>
@@ -167,7 +167,7 @@ include __DIR__ . '/../templates/top.php';
 
     <h2 id="copyright">Book covers and copyright</h2>
     <p>Book covers belong to their publishers and creators, and are shown only to identify each book. Some come from <a class="link" href="https://openlibrary.org/" rel="noopener">Open Library</a>, and those are credited on the book's page. When you upload a photo, you confirm you're allowed to use it, and you let us store and show it on the site until you remove it.</p>
-    <p>If you own the rights to something here and want it removed, email <?= $contactLink ?> with a link to the page and how you're connected to the work. We'll remove it promptly once we've confirmed the request.</p>
+    <p>If you own the rights to something here and want it removed, <a class="link" href="#contact">contact us</a> with a link to the page and how you're connected to the work. We'll remove it promptly once we've confirmed the request.</p>
 
     <h2 id="contact">Changes and contact</h2>
     <p>We may update this page as the site changes, and the date at the top shows the latest version. If a change is significant, we'll try to let members know. Continuing to use the site after a change means you accept it.</p>

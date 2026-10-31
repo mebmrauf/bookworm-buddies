@@ -58,6 +58,9 @@ if ($book['listing_type'] === 'swap') {
     $offeredTitle = $offered['title'];
 }
 
+// Counts readers rather than requests, so asking again after a refusal doesn't push a book up the list.
+$firstRequest = !run("SELECT 1 FROM swap WHERE bookID = ? AND requesterID = ? LIMIT 1", 'ii', $bookID, $userID)->get_result()->num_rows;
+
 try {
     run(
         "INSERT INTO swap (requesterID, ownerID, bookID, status, kind, offered_bookID, handover, message) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)",
@@ -68,6 +71,9 @@ try {
         throw $ex;
     }
     flash('That book is not available.', '/home.php?available=1');
+}
+if ($firstRequest) {
+    run("UPDATE collection SET request_count = request_count + 1 WHERE bookID = ?", 'i', $bookID);
 }
 
 $wants = [

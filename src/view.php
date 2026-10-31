@@ -103,6 +103,20 @@ function upload_box($field, $previewAlt, $currentHtml = null, $round = false, $h
         . '</div>';
 }
 
+// Each owner's rating, in one query for a whole page of books.
+function owner_ratings($books) {
+    $ids = array_values(array_unique(array_map('intval', array_column($books, 'ownerID'))));
+    if (!$ids) {
+        return [];
+    }
+    $rows = run("SELECT ratedID, AVG(stars), COUNT(*) FROM ratings WHERE ratedID IN (" . implode(',', $ids) . ") GROUP BY ratedID")->get_result()->fetch_all();
+    $ratings = [];
+    foreach ($rows as [$id, $average, $count]) {
+        $ratings[$id] = ['average' => (float) $average, 'count' => (int) $count];
+    }
+    return $ratings;
+}
+
 function stars_label($average, $count) {
     if (!$count) {
         return 'No ratings yet';
