@@ -4,7 +4,7 @@
   "short_name": "Bookworm",
   "description": "Borrow, swap and give away books with readers near you.",
   "lang": "en",
-  "start_url": "/home.php",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

@@ -1581,31 +1581,31 @@ input.upload__input.upload__input {
   flex: none;
 }
 
-.panel {
-  display: flex;
-  flex-direction: column;
+.settings__title { margin-bottom: 20px; }
+.settings .form { gap: 0; }
+.settings__section {
+  display: grid;
   gap: 16px;
-  min-width: 0;
-  margin: 0;
-  padding: 20px 0 0;
-  border: 0;
+  padding: 28px 0;
   border-top: 1px solid var(--line);
 }
-
-.panel legend {
-  float: left;
-  width: 100%;
-  padding: 0;
-  font: 600 1.15rem var(--serif);
+.settings__intro h2 { margin-bottom: 6px; font-size: 1.25rem; }
+.settings__intro p { max-width: 30em; color: var(--muted); font-size: 0.92rem; }
+.settings__fields { display: flex; flex-direction: column; gap: 18px; min-width: 0; max-width: 760px; }
+/* Stays on screen while scrolling a long form, above the phone tab bar. */
+.settings__save {
+  position: sticky;
+  bottom: calc(57px + env(safe-area-inset-bottom));
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 0;
+  background: var(--paper);
+  border-top: 1px solid var(--line);
 }
-
-.panel legend + * { clear: both; }
-
-.panel--danger {
-  align-items: flex-start;
-  margin-top: 32px;
-  border-color: var(--danger);
-}
+.settings__section--danger { margin-top: 28px; border-top-color: var(--danger); }
+.settings__section--danger h2 { color: var(--danger); }
 
 /* Landing page */
 
@@ -1899,6 +1899,8 @@ select {
   .post-card__picture { width: 110px; }
   .about__hero { grid-template-columns: 1fr 1fr; gap: 64px; padding-bottom: 56px; }
   .about__section { grid-template-columns: 260px 1fr; gap: 32px; padding: 48px 0; }
+  .settings__section { grid-template-columns: 280px minmax(0, 1fr); gap: 48px; padding: 36px 0; }
+  .settings__save { bottom: 0; padding-left: calc(280px + 48px); }
   .about__cta { margin: 16px calc(var(--gutter) * -1) -56px; padding: 88px var(--gutter); }
   .policy__layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 56px; align-items: start; }
   .policy__nav { position: sticky; top: 84px; }
@@ -1940,6 +1942,8 @@ select {
   .hero__fan a:focus-visible { z-index: 1; transform: translateY(-10px) rotate(0); }
   .landing__section { padding: 56px var(--gutter); }
   .footer { display: block; }
+  /* The footer has these on larger screens. Phones have no footer, so they stay in the menu there. */
+  .menu__panel .menu__phone-only { display: none; }
   .book-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .book-card__title {
     display: -webkit-box;

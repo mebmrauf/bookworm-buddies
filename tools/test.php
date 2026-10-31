@@ -188,7 +188,7 @@ foreach (['config.php', 'ca.pem', 'demo-accounts.txt', 'database/schema.sql', 's
 
 // ---- Phone app
 $manifest = json_decode($anon->get('manifest.json'), true);
-check('pwa: the manifest is valid', $anon->code === 200 && ($manifest['name'] ?? '') === 'Bookworm Buddies' && ($manifest['display'] ?? '') === 'standalone' && ($manifest['start_url'] ?? '') === '/home.php');
+check('pwa: the manifest is valid', $anon->code === 200 && ($manifest['name'] ?? '') === 'Bookworm Buddies' && ($manifest['display'] ?? '') === 'standalone' && ($manifest['start_url'] ?? '') === '/');
 $sizes = [];
 foreach ($manifest['icons'] ?? [] as $icon) {
     $data = (new Browser())->get(ltrim($icon['src'], '/'));

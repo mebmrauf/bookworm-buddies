@@ -74,13 +74,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = 'Settings';
 include __DIR__ . '/../templates/top.php';
 ?>
-<div class="narrow">
-    <h1>Settings</h1>
+<div class="settings">
+    <h1 class="settings__title">Settings</h1>
     <?php form_error($error ?? null); ?>
     <form class="form" action="/settings.php" method="post" enctype="multipart/form-data">
         <?= csrf_field() ?>
-        <fieldset class="panel">
-            <legend>Account</legend>
+        <section class="settings__section">
+            <div class="settings__intro">
+                <h2>Profile</h2>
+                <p>How other readers see you. Your email is never shown to them.</p>
+            </div>
+            <div class="settings__fields">
             <?php if (cloudinary_enabled()): ?>
                 <div class="field">
                     <label for="avatar">Profile photo <span class="optional">(optional)</span></label>
@@ -113,11 +117,15 @@ include __DIR__ . '/../templates/top.php';
                     <p class="help">Waiting for you to confirm <?= e($user['pending_email']) ?>.</p>
                 <?php endif; ?>
             </div>
-        </fieldset>
+            </div>
+        </section>
 
-        <fieldset class="panel">
-            <legend>Your location</legend>
-            <p class="help">Shown on your profile and books, so people nearby can find them. Never your full address.</p>
+        <section class="settings__section">
+            <div class="settings__intro">
+                <h2>Location</h2>
+                <p>Shown on your profile and books, so people nearby can find them. Never your full address.</p>
+            </div>
+            <div class="settings__fields">
             <div class="form__row">
                 <div class="field">
                     <label for="city">City</label>
@@ -133,11 +141,15 @@ include __DIR__ . '/../templates/top.php';
                     <input id="area" type="text" name="area" maxlength="60" placeholder="For example: Dhanmondi" value="<?= e($user['area']) ?>">
                 </div>
             </div>
-        </fieldset>
+            </div>
+        </section>
 
-        <fieldset class="panel">
-            <legend>Personal details</legend>
-            <p class="help">All optional, and other members can't see them. Your delivery address is the one exception: it goes to a book's owner only when they accept your courier request.</p>
+        <section class="settings__section">
+            <div class="settings__intro">
+                <h2>Contact details</h2>
+                <p>All optional, and other members can't see them. Your delivery address is the one exception: it goes to a book's owner only when they accept your courier request.</p>
+            </div>
+            <div class="settings__fields">
             <div class="field">
                 <label for="mobile">Mobile number</label>
                 <input id="mobile" type="tel" name="mobile" maxlength="20" autocomplete="tel" value="<?= e($user['mobile']) ?>">
@@ -146,37 +158,44 @@ include __DIR__ . '/../templates/top.php';
                 <label for="address">Delivery address</label>
                 <textarea id="address" name="address" rows="2" maxlength="255" autocomplete="street-address"><?= e($user['address']) ?></textarea>
             </div>
-        </fieldset>
+            </div>
+        </section>
 
-        <fieldset class="panel">
-            <legend>Password</legend>
-            <p class="help">Your current password is only needed to change your email or password.</p>
+        <section class="settings__section">
+            <div class="settings__intro">
+                <h2>Password</h2>
+                <p>Your current password is only needed to change your email or password. Leave these empty otherwise.</p>
+            </div>
+            <div class="settings__fields">
             <div class="field">
                 <label for="current_password">Current password</label>
                 <?= password_input('current_password', 'current_password', 'autocomplete="current-password"') ?>
             </div>
             <div class="field">
-                <label for="new_password">New password (optional)</label>
+                <label for="new_password">New password</label>
                 <?= password_input('new_password', 'new_password', 'minlength="8" maxlength="72" autocomplete="new-password"') ?>
             </div>
-        </fieldset>
+            </div>
+        </section>
 
-        <div class="form__actions">
+        <div class="settings__save">
             <button type="submit" class="btn btn--primary">Save changes</button>
             <a class="btn btn--ghost" href="/profile.php">Cancel</a>
         </div>
     </form>
 
-    <section class="panel panel--danger">
-        <h2>Delete account</h2>
-        <p class="muted">This permanently removes your account, your books and your requests.</p>
-        <form action="/actions/account-delete.php" method="post" data-confirm="Delete your account and all your books? This cannot be undone.">
+    <section class="settings__section settings__section--danger">
+        <div class="settings__intro">
+            <h2>Delete account</h2>
+            <p>This permanently removes your account, your books and your requests.</p>
+        </div>
+        <form class="settings__fields" action="/actions/account-delete.php" method="post" data-confirm="Delete your account and all your books? This cannot be undone.">
             <?= csrf_field() ?>
             <div class="field">
                 <label for="delete_password">Your password</label>
                 <?= password_input('delete_password', 'password', 'autocomplete="current-password" required') ?>
             </div>
-            <button type="submit" class="btn btn--danger">Delete my account</button>
+            <div><button type="submit" class="btn btn--danger">Delete my account</button></div>
         </form>
     </section>
 </div>
