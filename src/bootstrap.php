@@ -7,9 +7,13 @@ set_exception_handler(function (Throwable $e) {
     echo 'Something went wrong. Please try again.';
 });
 
-header("Content-Security-Policy: default-src 'self'; img-src 'self' https://res.cloudinary.com blob:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; form-action 'self'; frame-ancestors 'none'; base-uri 'self'");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'inline-speculation-rules'; img-src 'self' https://res.cloudinary.com blob:; style-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'");
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
+
+// Revalidates on normal visits, but unlike PHP's default no-store it lets the back button be instant.
+session_cache_limiter('');
+header('Cache-Control: private, no-cache');
 
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'secure' => !empty($_SERVER['HTTPS'])]);
 session_start();
@@ -24,6 +28,24 @@ const DUPLICATE_KEY = 1062;
 
 // 0 means a guest. Public pages use this; private ones go through auth.php.
 $userID = (int) ($_SESSION['user_id'] ?? 0);
+
+// % and _ are wildcards in LIKE, so a search for "%" must not match everything.
+function like_pattern($text) {
+    return '%' . addcslashes($text, '%_\\') . '%';
+}
+
+function current_user() {
+    global $userID;
+    static $user = false;
+    if ($user === false) {
+        $user = !$userID ? null : run("
+            SELECT first_name, last_name, avatar_public_id, city, address,
+                (SELECT COUNT(*) FROM swap WHERE ownerID = users.userID AND status = 'pending') AS pending
+            FROM users WHERE userID = ?
+        ", 'i', $userID)->get_result()->fetch_assoc();
+    }
+    return $user;
+}
 
 // Only same-site paths, so a crafted link can't send people to another site after sign-in.
 function safe_next($path) {

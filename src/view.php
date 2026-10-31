@@ -19,19 +19,29 @@ function icon($name) {
         'settings' => '<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>',
         'logout' => '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
         'mail' => '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+        'image' => '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
         'pin' => '<path d="M20 10c0 5-8 12-8 12s-8-7-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
         'login' => '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
     ];
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $paths[$name] . '</svg>';
 }
 
+function asset($file) {
+    // A new version gets a new address, so browsers can keep the old one for a year without going stale.
+    return "/assets/$file?v=" . filemtime(__DIR__ . "/../public/assets/$file");
+}
+
 // A designed placeholder keeps the grid even for books without a photo.
-function book_cover($book, $width = 300) {
-    $height = (int) round($width * 1.5);
+// $sizes says how wide the cover shows on screen, so a phone doesn't download a desktop-sized image.
+function book_cover($book, $sizes = '(min-width: 960px) 280px, (min-width: 640px) 31vw, 46vw') {
     if (!empty($book['cover_public_id']) && cloudinary_enabled()) {
-        return '<img class="cover" loading="lazy" width="' . $width . '" height="' . $height . '" alt="Cover of ' . e($book['title']) . '"'
-            . ' src="' . e(image_url($book['cover_public_id'], $width, $height)) . '"'
-            . ' srcset="' . e(image_url($book['cover_public_id'], $width * 2, $height * 2)) . ' 2x">';
+        $srcset = [];
+        foreach ([120, 200, 320, 480, 640] as $width) {
+            $srcset[] = image_url($book['cover_public_id'], $width, $width * 3 / 2) . " {$width}w";
+        }
+        return '<img class="cover" loading="lazy" decoding="async" width="320" height="480" alt="Cover of ' . e($book['title']) . '"'
+            . ' src="' . e(image_url($book['cover_public_id'], 320, 480)) . '"'
+            . ' srcset="' . e(implode(', ', $srcset)) . '" sizes="' . e($sizes) . '">';
     }
     return '<div class="cover cover--blank cover--tone-' . ($book['bookID'] % 6) . '" role="img" aria-label="No cover photo for ' . e($book['title']) . '">'
         . '<span class="cover__title">' . e($book['title']) . '</span>'
@@ -45,6 +55,23 @@ function avatar($person, $size = 40) {
     }
     $initials = mb_strtoupper(mb_substr($person['first_name'], 0, 1) . mb_substr($person['last_name'], 0, 1));
     return '<span class="avatar avatar--' . $size . '" aria-hidden="true">' . e($initials) . '</span>';
+}
+
+// A photo picker with a preview. The real file input covers the box, so clicking and dragging a file both work natively.
+function upload_box($field, $previewAlt, $currentHtml = null, $round = false, $hasPhoto = null) {
+    $action = ($hasPhoto ?? $currentHtml) ? 'Change photo' : 'Choose a photo';
+    return '<div class="upload' . ($round ? ' upload--round' : '') . '" data-upload>'
+        . '<div class="upload__picture">'
+        . ($currentHtml ? '<div class="upload__current" data-upload-current>' . $currentHtml . '</div>' : '<span class="upload__placeholder" data-upload-current>' . icon('image') . '</span>')
+        . '<img class="upload__preview" data-upload-preview alt="' . e($previewAlt) . '" hidden>'
+        . '</div>'
+        . '<div class="upload__text">'
+        . '<strong data-upload-name data-default="' . $action . '">' . $action . '</strong>'
+        . '<span class="help" data-upload-hint>Click or drag a file here. JPG, PNG or WebP. Large photos are compressed for you.</span>'
+        . '</div>'
+        . '<input class="upload__input" id="' . e($field) . '" type="file" name="' . e($field) . '" accept="image/jpeg,image/png,image/webp">'
+        . '<button class="btn-text upload__clear" type="button" data-upload-clear hidden>Remove</button>'
+        . '</div>';
 }
 
 function location_label($person) {

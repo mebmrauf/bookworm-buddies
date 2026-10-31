@@ -1,16 +1,9 @@
 <?php
-$me = null;
-if ($userID) {
-    $me = run("
-        SELECT first_name, last_name, avatar_public_id,
-            (SELECT COUNT(*) FROM swap WHERE ownerID = users.userID AND status = 'pending') AS pending
-        FROM users WHERE userID = ?
-    ", 'i', $userID)->get_result()->fetch_assoc();
-    // The account was deleted in another browser.
-    if (!$me) {
-        session_unset();
-        $userID = 0;
-    }
+$me = current_user();
+// The account was deleted in another browser.
+if ($userID && !$me) {
+    session_unset();
+    $userID = 0;
 }
 $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : '';
 ?>
@@ -21,12 +14,13 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e($pageTitle) ?> - Bookworm Buddies</title>
     <?php if (isset($pageDescription)): ?><meta name="description" content="<?= e($pageDescription) ?>"><?php endif; ?>
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
-    <link rel="stylesheet" href="/assets/app.css">
-    <script src="/assets/app.js" defer></script>
+    <link rel="preload" href="/assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+    <script type="speculationrules">{"prefetch":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/actions/*"}},{"not":{"href_matches":"/verify*"}}]},"eagerness":"moderate"}]}</script>
+    <link rel="stylesheet" href="<?= asset('app.css') ?>">
+    <script src="<?= asset('app.js') ?>" defer></script>
 </head>
 <body>
+    <div class="loading-bar" aria-hidden="true"></div>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="topbar">
         <div class="topbar__inner">
@@ -34,7 +28,9 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
             <form class="search" action="/search.php" method="get" role="search">
                 <label class="visually-hidden" for="site-search">Search books</label>
                 <?= icon('search') ?>
-                <input id="site-search" type="search" name="q" placeholder="<?= $me ? 'Search books and people' : 'Search books' ?>" value="<?= e($searchValue ?? '') ?>" required>
+                <input id="site-search" type="search" name="q" placeholder="<?= $me ? 'Search books and people' : 'Search books' ?>" value="<?= e($searchValue ?? '') ?>" required
+                    autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results">
+                <div id="search-results" class="search__results" role="listbox" aria-label="Search results" hidden></div>
             </form>
             <nav class="nav" aria-label="Main">
                 <a href="/home.php"<?= $current('browse') ?>><?= icon('compass') ?><span>Browse</span></a>

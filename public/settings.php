@@ -77,12 +77,7 @@ include __DIR__ . '/../templates/top.php';
             <?php if (cloudinary_enabled()): ?>
                 <div class="field">
                     <label for="avatar">Profile photo <span class="optional">(optional)</span></label>
-                    <div class="avatar-field">
-                        <?= avatar(['avatar_public_id' => $oldAvatar] + $user, 80) ?>
-                        <img class="preview preview--round" data-preview="avatar" alt="Selected photo preview" hidden>
-                        <input id="avatar" type="file" name="avatar" accept="image/jpeg,image/png,image/webp" data-image-input="avatar" aria-describedby="avatar-help">
-                    </div>
-                    <p class="help" id="avatar-help">JPG, PNG or WebP, up to 5 MB.</p>
+                    <?= upload_box('avatar', 'Selected photo', avatar(['avatar_public_id' => $oldAvatar] + $user, 80), true, (bool) $oldAvatar) ?>
                     <?php if ($oldAvatar): ?>
                         <label class="check"><input type="checkbox" name="remove_avatar" value="1"> Remove this photo</label>
                     <?php endif; ?>

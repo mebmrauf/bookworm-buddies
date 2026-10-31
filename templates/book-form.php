@@ -6,7 +6,7 @@
     <?= csrf_field() ?>
     <div class="field">
         <label for="title">Title</label>
-        <input id="title" type="text" name="title" maxlength="255" value="<?= e($values['title']) ?>" required>
+        <input id="title" type="text" name="title" maxlength="255" value="<?= e($values['title']) ?>" required<?= $values['title'] === '' ? ' autofocus' : '' ?>>
     </div>
     <div class="field">
         <label for="author">Author</label>
@@ -26,13 +26,10 @@
     <?php if (cloudinary_enabled()): ?>
         <div class="field">
             <label for="cover">Cover photo <span class="optional">(optional)</span></label>
+            <?= upload_box('cover', 'Selected cover', !empty($values['cover_public_id']) ? book_cover($values, '88px') : null) ?>
             <?php if (!empty($values['cover_public_id'])): ?>
-                <div class="current-image"><?= book_cover($values, 120) ?></div>
                 <label class="check"><input type="checkbox" name="remove_cover" value="1"> Remove this photo</label>
             <?php endif; ?>
-            <img class="preview" data-preview="cover" alt="Selected cover preview" hidden>
-            <input id="cover" type="file" name="cover" accept="image/jpeg,image/png,image/webp" data-image-input="cover" aria-describedby="cover-help">
-            <p class="help" id="cover-help">JPG, PNG or WebP, up to 5 MB.</p>
         </div>
     <?php endif; ?>
     <?php if (isset($shareOption)): ?>

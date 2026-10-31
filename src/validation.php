@@ -1,7 +1,7 @@
 <?php
 // Each function returns an error message, or null when valid.
 
-const GENDERS = ['Female', 'Male', 'Non-binary', 'Prefer not to say'];
+const GENDERS = ['Male', 'Female'];
 
 const HANDOVERS = ['meet' => 'Meet in person', 'courier' => 'Courier, receiver pays', 'both' => 'Meet in person or courier'];
 

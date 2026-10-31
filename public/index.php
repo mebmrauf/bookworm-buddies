@@ -7,12 +7,11 @@ if ($userID) {
 
 $showcased = "FROM collection c JOIN books b ON c.bookID = b.bookID JOIN users u ON c.userID = u.userID WHERE c.showcase = 1";
 
-$bookCount = run("SELECT COUNT(*) $showcased")->get_result()->fetch_row()[0];
 $books = run("
     SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, u.username, u.userID AS ownerID, u.city, u.area
     $showcased
     ORDER BY b.cover_public_id IS NULL, b.bookID DESC
-    LIMIT 10
+    LIMIT 12
 ")->get_result();
 
 $pageTitle = 'Share and borrow books';
@@ -25,7 +24,7 @@ include __DIR__ . '/../templates/top.php';
         <h1>Your next favorite book is on a neighbor's shelf.</h1>
         <p class="hero__lead">Borrow books from other readers, and lend the ones you've finished. It's free, and you can look around without an account.</p>
         <div class="actions">
-            <a class="btn btn--primary btn--large" href="/home.php">Browse <?= (int) $bookCount ?> books</a>
+            <a class="btn btn--primary btn--large" href="/home.php">Browse books</a>
             <a class="btn btn--light btn--large" href="/signup.php">Join free</a>
         </div>
     </div>
