@@ -52,7 +52,7 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
                         <a href="/settings.php"><?= icon('settings') ?>Settings</a>
                         <a href="/about.php"><?= icon('compass') ?>About</a>
                         <a href="/rules.php"><?= icon('book') ?>Rules and policies</a>
-                        <button type="button" data-install hidden><?= icon('plus') ?>Install app</button>
+                        <button type="button" data-install hidden><?= icon('download') ?>Install app</button>
                         <form action="/actions/logout.php" method="post">
                             <?= csrf_field() ?>
                             <button type="submit"><?= icon('logout') ?>Log out</button>

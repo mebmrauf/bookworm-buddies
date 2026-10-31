@@ -5,6 +5,9 @@ $values = ['bookID' => 0, 'title' => post('title'), 'author' => post('author'), 
 $share = $_SERVER['REQUEST_METHOD'] !== 'POST' || post('share') === '1';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (rate_limited("add-book:user:$userID", 50, 86400)) {
+        flash('You have added a lot of books today. Please try again tomorrow.', '/profile.php');
+    }
     require_csrf('/add-book.php');
     $error = validate_book($values['title'], $values['author'], $values['year_published']);
 

@@ -42,6 +42,7 @@ function cleanup() {
     }
     db("DELETE FROM admin_log WHERE logID > ?", 'i', $logStart);
     db("DELETE FROM login_attempts WHERE username = 'admin'");
+    db("DELETE FROM rate_limits WHERE hit_key LIKE 'password:user:%' OR hit_key = 'admin-login:all' OR hit_key LIKE '%:ip:%' OR hit_key LIKE 'zztest%'");
     $covers = db("SELECT b.cover_public_id FROM books b JOIN collection c ON b.bookID = c.bookID JOIN users u ON c.userID = u.userID WHERE u.username LIKE CONCAT(?, '%')", 's', $tag)->fetch_all();
     $avatars = db("SELECT avatar_public_id FROM users WHERE username LIKE CONCAT(?, '%')", 's', $tag)->fetch_all();
     delete_images(array_merge(array_column($covers, 0), array_column($avatars, 0)));
@@ -65,6 +66,10 @@ class Browser {
     }
 
     private function request($path, $fields = null) {
+        // The suite signs up far more than one person would. The limits have their own check below.
+        if ($fields !== null && empty($GLOBALS['keepLimits'])) {
+            db("DELETE FROM rate_limits WHERE hit_key LIKE '%:ip:%'");
+        }
         $ch = curl_init($this->site . '/' . $path);
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_COOKIEJAR => $this->jar, CURLOPT_COOKIEFILE => $this->jar]);
         if ($fields !== null) {
@@ -215,7 +220,7 @@ foreach (['actions/book-delete.php', 'actions/account-delete.php', 'actions/swap
     $anon->rawPost($page, ['bookID' => 1]);
     check("guest: POST $page redirects to sign in", str_ends_with($anon->url, 'signin.php'));
 }
-foreach (['//evil.example', '/\\evil.example', 'https://evil.example', '/actions/logout.php'] as $bad) {
+foreach (['//evil.example', "/\t/evil.example", '/\\evil.example', 'https://evil.example', '/actions/logout.php'] as $bad) {
     check("signin: refuses next=$bad", str_contains($anon->get('signin.php?next=' . urlencode($bad)), 'name="next" value="/home.php"'));
 }
 
@@ -310,7 +315,7 @@ for ($i = 0; $i < 5; $i++) {
 check('signin: blocked after 5 failures', str_contains(signin($limited, 'q'), 'Too many failed attempts') && !str_ends_with($limited->url, 'home.php'));
 
 // ---- Username and optional details
-$settings = fn($overrides = []) => $overrides + ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}a", 'date_of_birth' => '', 'gender' => '', 'mobile' => '', 'address' => '', 'new_password' => ''];
+$settings = fn($overrides = []) => $overrides + ['current_password' => 'correct-horse-1', 'first_name' => 'A', 'last_name' => 'B', 'email' => test_email('a'), 'username' => "{$tag}a", 'date_of_birth' => '', 'gender' => '', 'mobile' => '', 'address' => '', 'new_password' => ''];
 check('username: a taken name is refused', str_contains($alice->post('settings.php', $settings(['username' => "{$tag}b"]), 'settings.php'), 'already taken'));
 check('username: uniqueness ignores capitals', str_contains($alice->post('settings.php', $settings(['username' => strtoupper("{$tag}b")]), 'settings.php'), 'already taken'));
 check('username: bad characters are refused', str_contains($alice->post('settings.php', $settings(['username' => "a b'c"]), 'settings.php'), 'Username must be'));
@@ -827,6 +832,99 @@ check('due: the owner can change it', $swapRow($loanSwap)['due_date'] === date('
 db("UPDATE swap SET due_date = ? WHERE swapID = ?", 'si', date('Y-m-d', strtotime('-2 days')), $loanSwap);
 check('due: an overdue loan is marked', str_contains($bob->get('requests.php'), 'Overdue'));
 
+// Rate limits and sessions.
+check('limits: allows up to the limit, then refuses', !rate_limited("{$tag}x", 2, 60) && !rate_limited("{$tag}x", 2, 60) && rate_limited("{$tag}x", 2, 60));
+check('limits: other keys are not affected', !rate_limited("{$tag}y", 2, 60));
+
+$keepLimits = true;
+foreach (['127.0.0.1', '::1'] as $localIP) {
+    for ($i = 0; $i < 10; $i++) {
+        db("INSERT INTO rate_limits (hit_key) VALUES (?)", 's', "signup:ip:$localIP");
+    }
+}
+$blocked = new Browser();
+check('limits: too many signups from one connection are refused', str_contains(signup($blocked, 'lim', [], false), 'Too many accounts'));
+check('limits: the refused signup created no account', !db("SELECT 1 FROM users WHERE email = ?", 's', test_email('lim'))->num_rows);
+$keepLimits = false;
+
+$headers = implode("\n", get_headers("$base/rules.php"));
+check('headers: browser features are switched off', str_contains($headers, 'Permissions-Policy'));
+check('headers: no other site may read responses', !stripos($headers, 'Access-Control-Allow-Origin'));
+
+$laptop = new Browser();
+$phone = new Browser();
+signup($laptop, 'pw');
+signin($laptop, 'pw');
+signin($phone, 'pw');
+$phone->get('requests.php');
+check('sessions: a second device is signed in', str_ends_with($phone->url, 'requests.php'));
+$laptop->post('settings.php', ['first_name' => 'A', 'last_name' => 'B', 'email' => test_email('pw'), 'username' => "{$tag}pw", 'date_of_birth' => '', 'gender' => '', 'mobile' => '', 'address' => '', 'current_password' => 'correct-horse-1', 'new_password' => 'correct-horse-2'], 'settings.php');
+$laptop->get('requests.php');
+check('sessions: the device that changed the password stays signed in', str_ends_with($laptop->url, 'requests.php'));
+$phone->get('requests.php');
+check('sessions: changing the password signs out other devices', str_ends_with($phone->url, 'signin.php'));
+
+// Forgotten passwords.
+$forgetful = new Browser();
+$otherDevice = new Browser();
+signup($forgetful, 'rst');
+signin($otherDevice, 'rst');
+$rstEmail = test_email('rst');
+$rstID = user_id('rst');
+$sayKnown = $forgetful->post('forgot-password.php', ['email' => $rstEmail], 'forgot-password.php');
+$sayUnknown = $forgetful->post('forgot-password.php', ['email' => "$tag-nobody@example.com"], 'forgot-password.php');
+check('reset: known and unknown emails get the same answer', str_contains($sayKnown, 'If that email has an account') && str_contains($sayUnknown, 'If that email has an account'));
+check('reset: only the token hash is stored, with an expiry', strlen(db("SELECT reset_token_hash FROM users WHERE userID = ?", 'i', $rstID)->fetch_row()[0]) === 64);
+check('reset: sign-in page links to it', str_contains($forgetful->get('signin.php'), 'forgot-password.php'));
+$plantReset = function ($minutes) use ($rstID) {
+    $token = bin2hex(random_bytes(32));
+    db("UPDATE users SET reset_token_hash = ?, reset_expires_at = NOW() + INTERVAL ? MINUTE WHERE userID = ?", 'sii', hash('sha256', $token), $minutes, $rstID);
+    return $token;
+};
+check('reset: an expired link is refused', str_contains($forgetful->get('reset-password.php?token=' . $plantReset(-1)), "doesn't work"));
+check('reset: a made-up link is refused', str_contains($forgetful->get('reset-password.php?token=nope'), "doesn't work"));
+check('reset: an empty link is refused', str_contains($forgetful->get('reset-password.php'), "doesn't work"));
+$resetToken = $plantReset(30);
+$resetPage = 'reset-password.php?token=' . $resetToken;
+check('reset: a valid link shows the form', str_contains($forgetful->get($resetPage), 'Choose a new password'));
+check('reset: opening the link changes nothing', db("SELECT reset_token_hash FROM users WHERE userID = ?", 'i', $rstID)->fetch_row()[0] !== null);
+check('reset: a short password is refused', str_contains($forgetful->post('reset-password.php', ['token' => $resetToken, 'password' => 'short'], $resetPage), 'Password must be'));
+$forgetful->rawPost('reset-password.php', ['token' => $resetToken, 'password' => 'after-reset-pass-1']);
+check('reset: a forged form changes nothing', db("SELECT reset_token_hash FROM users WHERE userID = ?", 'i', $rstID)->fetch_row()[0] !== null);
+$forgetful->post('reset-password.php', ['token' => $resetToken, 'password' => 'after-reset-pass-1'], $resetPage);
+check('reset: the link works only once', str_contains($forgetful->get($resetPage), "doesn't work"));
+$fresh = new Browser();
+check('reset: the old password stops working', str_contains(signin($fresh, 'rst'), 'Invalid email'));
+signin($fresh, 'rst', 'after-reset-pass-1');
+$fresh->get('requests.php');
+check('reset: the new password works', str_ends_with($fresh->url, 'requests.php'));
+$otherDevice->get('requests.php');
+check('reset: other devices are signed out', str_ends_with($otherDevice->url, 'signin.php'));
+$keepLimits = true;
+db("DELETE FROM rate_limits WHERE hit_key = ?", 's', 'reset:to:' . md5(strtolower($rstEmail)));
+foreach ([1, 2, 3] as $i) {
+    $forgetful->post('forgot-password.php', ['email' => $rstEmail], 'forgot-password.php');
+}
+db("UPDATE users SET reset_token_hash = NULL WHERE userID = ?", 'i', $rstID);
+$forgetful->post('forgot-password.php', ['email' => $rstEmail], 'forgot-password.php');
+check('reset: one address gets a limited number of links', db("SELECT reset_token_hash FROM users WHERE userID = ?", 'i', $rstID)->fetch_row()[0] === null);
+$keepLimits = false;
+
+// Changes a stolen session shouldn't be able to make.
+$guarded = new Browser();
+signup($guarded, 'grd');
+signin($guarded, 'grd');
+$guardedForm = ['first_name' => 'A', 'last_name' => 'B', 'username' => "{$tag}grd", 'email' => "$tag-moved@example.com", 'date_of_birth' => '', 'gender' => '', 'mobile' => '', 'address' => '', 'new_password' => ''];
+check('email: changing it needs the current password', str_contains($guarded->post('settings.php', $guardedForm + ['current_password' => 'wrong'], 'settings.php'), 'current password is incorrect'));
+check('email: nothing changed without it', db("SELECT pending_email FROM users WHERE userID = ?", 'i', user_id('grd'))->fetch_row()[0] === null);
+$guarded->post('settings.php', $guardedForm + ['current_password' => 'correct-horse-1'], 'settings.php');
+check('email: the right password allows it', db("SELECT pending_email FROM users WHERE userID = ?", 'i', user_id('grd'))->fetch_row()[0] === "$tag-moved@example.com");
+for ($i = 0; $i < 10; $i++) {
+    $guarded->post('actions/account-delete.php', ['password' => 'wrong-password'], 'settings.php');
+}
+$guarded->post('actions/account-delete.php', ['password' => 'correct-horse-1'], 'settings.php');
+check('password checks: guessing is limited', user_id('grd') !== null);
+
 // A second copy of the site with a known admin login, so the suite never needs the real password.
 $adminPassword = bin2hex(random_bytes(12));
 $cronToken = bin2hex(random_bytes(16));
@@ -1106,7 +1204,11 @@ $bob->post('actions/feedback-add.php', ['bookID' => $aliceBook, 'comment' => 'ni
 $bob->post('actions/swap-request.php', ['bookID' => $aliceBook]);
 $alice->get('actions/account-delete.php');
 check('csrf: a plain link does not delete an account', user_id('a') !== null);
+$alice->post('actions/account-delete.php', ['password' => 'wrong-password']);
+check('account: the wrong password does not delete it', user_id('a') !== null);
 $alice->post('actions/account-delete.php', []);
+check('account: no password does not delete it', user_id('a') !== null);
+$alice->post('actions/account-delete.php', ['password' => 'brand-new-pass-1']);
 check('account: user deleted', user_id('a') === null);
 check('account: their books deleted (finding 10)', db("SELECT COUNT(*) FROM books WHERE bookID IN (?, ?, ?)", 'iii', $aliceBook, $shown, $hidden)->fetch_row()[0] == 0);
 check('account: their swaps deleted', latest_swap($aliceBook) === null);

@@ -20,6 +20,8 @@ CREATE TABLE users (
     verify_token_hash CHAR(64) UNIQUE,
     verify_expires_at DATETIME,
     verify_sent_at DATETIME,
+    reset_token_hash CHAR(64) UNIQUE,
+    reset_expires_at DATETIME,
     INDEX (city)
 );
 
@@ -81,6 +83,15 @@ CREATE TABLE feedback (
     reply VARCHAR(500),
     FOREIGN KEY (userID) REFERENCES users(userID) ON DELETE CASCADE,
     FOREIGN KEY (bookID) REFERENCES books(bookID) ON DELETE CASCADE
+);
+
+-- Recent uses of limited actions: emails, signups, uploads and so on. Old rows are removed as new ones arrive.
+CREATE TABLE rate_limits (
+    hitID BIGINT AUTO_INCREMENT PRIMARY KEY,
+    hit_key VARCHAR(100) NOT NULL,
+    hit_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX lookup (hit_key, hit_at),
+    INDEX expiry (hit_at)
 );
 
 CREATE TABLE login_attempts (

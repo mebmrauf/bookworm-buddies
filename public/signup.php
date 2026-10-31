@@ -5,6 +5,8 @@ if ($userID) {
     go('/home.php');
 }
 
+const MAX_SIGNUPS_PER_HOUR = 10;
+
 // Readable, and unique: a short number is added when the plain name is taken.
 function generate_username($firstName, $lastName) {
     $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', trim("$firstName $lastName")) ?: '';
@@ -31,6 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $error = validate_name($firstName, $lastName) ?? validate_email($email) ?? validate_password($password);
     if (!$error && post('agree') !== '1') {
         $error = 'Please agree to the community rules to create an account.';
+    }
+
+    if (!$error && rate_limited('signup:ip:' . $_SERVER['REMOTE_ADDR'], MAX_SIGNUPS_PER_HOUR, 3600)) {
+        $error = 'Too many accounts were created from this connection. Please try again in an hour.';
     }
 
     if (!$error) {

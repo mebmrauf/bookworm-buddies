@@ -10,6 +10,10 @@ set_exception_handler(function (Throwable $e) {
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'inline-speculation-rules'; img-src 'self' https://res.cloudinary.com blob:; style-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'");
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+if (!empty($_SERVER['HTTPS'])) {
+    header('Strict-Transport-Security: max-age=31536000');
+}
 
 // Revalidates on normal visits, but unlike PHP's default no-store it lets the back button be instant.
 date_default_timezone_set('Asia/Dhaka');
@@ -65,24 +69,42 @@ function like_pattern($text) {
     return '%' . addcslashes($text, '%_\\') . '%';
 }
 
+// For changes a stolen session shouldn't be able to make. Limited, so it can't be used to guess the password.
+function current_password_ok($given, $hash) {
+    global $userID;
+    return !rate_limited("password:user:$userID", 10, 900) && password_verify($given, $hash);
+}
+
+function password_session_check($hash) {
+    return hash('sha256', $hash);
+}
+
 function current_user() {
     global $userID;
     static $user = false;
     if ($user === false) {
         $user = !$userID ? null : run("
-            SELECT first_name, last_name, avatar_public_id, city, address,
+            SELECT first_name, last_name, avatar_public_id, city, address, password,
                 (SELECT COUNT(*) FROM swap WHERE ownerID = users.userID AND status = 'pending')
                     + (SELECT COUNT(*) FROM swap s JOIN messages m ON m.swapID = s.swapID AND m.read_at IS NULL AND m.senderID != users.userID WHERE s.ownerID = users.userID)
                     + (SELECT COUNT(*) FROM swap s JOIN messages m ON m.swapID = s.swapID AND m.read_at IS NULL AND m.senderID != users.userID WHERE s.requesterID = users.userID) AS pending
             FROM users WHERE userID = ? AND suspended_at IS NULL
         ", 'i', $userID)->get_result()->fetch_assoc();
+        if ($user) {
+            // A session stays valid only for the password it signed in with, so changing it signs out other devices.
+            $check = password_session_check($user['password']);
+            unset($user['password']);
+            if (!hash_equals($_SESSION['password_check'] ??= $check, $check)) {
+                $user = null;
+            }
+        }
     }
     return $user;
 }
 
 // Only same-site paths, so a crafted link can't send people to another site after sign-in.
 function safe_next($path) {
-    return is_string($path) && preg_match('#^/(?![/\\\\])#', $path) && !str_contains($path, 'actions/') ? $path : '/home.php';
+    return is_string($path) && preg_match('#^/(?![/\\\\])[^\x00-\x1f\x7f]*$#D', $path) && !str_contains($path, 'actions/') ? $path : '/home.php';
 }
 
 // Crafted requests can send arrays where a string is expected.

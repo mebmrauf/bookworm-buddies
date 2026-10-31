@@ -3,6 +3,10 @@ require_once __DIR__ . '/../../src/auth.php';
 
 require_post('/home.php');
 
+if (rate_limited("report:user:$userID", 20, 86400)) {
+    flash('You have sent a lot of reports today. We will look through them. Please try again tomorrow.', '/home.php');
+}
+
 $type = post('type');
 $id = (int) post('id');
 $reason = post('reason');

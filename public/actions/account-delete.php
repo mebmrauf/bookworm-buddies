@@ -3,6 +3,11 @@ require_once __DIR__ . '/../../src/auth.php';
 
 require_post('/settings.php');
 
+$hash = run("SELECT password FROM users WHERE userID = ?", 'i', $userID)->get_result()->fetch_row()[0];
+if (!current_password_ok(post('password', false), $hash)) {
+    flash('Your account was not deleted, because that password is incorrect.', '/settings.php');
+}
+
 $images = run("SELECT b.cover_public_id FROM books b JOIN collection c ON b.bookID = c.bookID WHERE c.userID = ?", 'i', $userID)->get_result()->fetch_all();
 $images = array_column($images, 0);
 $images = array_merge($images, array_column(run("SELECT image_public_id FROM posts WHERE userID = ?", 'i', $userID)->get_result()->fetch_all(), 0));

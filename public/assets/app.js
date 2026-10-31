@@ -307,34 +307,84 @@ if ('serviceWorker' in navigator) {
 }
 
 const isInstalled = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-const installButtons = document.querySelectorAll('[data-install]');
+const installMenuItem = document.querySelector('[data-install]');
+const installSheet = document.querySelector('[data-install-sheet]');
+const INSTALL_DISMISSED_KEY = 'installDismissedAt';
+const INSTALL_ASK_AGAIN_MS = 30 * 24 * 60 * 60 * 1000;
+const INSTALL_POPUP_DELAY_MS = 3000;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let installPrompt = null;
+
+const installWasDismissed = () => {
+  try {
+    return Date.now() - Number(localStorage.getItem(INSTALL_DISMISSED_KEY)) < INSTALL_ASK_AGAIN_MS;
+  } catch {
+    return false;
+  }
+};
+
+const closeInstallSheet = (remember) => {
+  if (installSheet) installSheet.hidden = true;
+  if (!remember) return;
+  try {
+    localStorage.setItem(INSTALL_DISMISSED_KEY, String(Date.now()));
+  } catch {
+    // Without storage the popup just comes back on a later visit.
+  }
+};
+
+const openInstallSheet = () => {
+  if (!installSheet) return;
+  // iPhones have no install prompt, so they get the steps instead of a button.
+  if (isIOS) {
+    installSheet.querySelector('[data-install-text]').textContent = 'Tap the Share button in your browser, then "Add to Home Screen".';
+    installSheet.querySelector('[data-install-accept]').hidden = true;
+  }
+  installSheet.hidden = false;
+};
+
+const runInstallPrompt = async () => {
+  closeInstallSheet(false);
+  installPrompt.prompt();
+  const { outcome } = await installPrompt.userChoice;
+  installPrompt = null;
+  if (installMenuItem) installMenuItem.hidden = true;
+  if (outcome !== 'accepted') closeInstallSheet(true);
+};
+
+// Only on phones, and not while someone is typing in a chat. Browsers don't offer the prompt once it's installed.
+const offerInstall = () => {
+  if (installMenuItem) installMenuItem.hidden = false;
+  const onPhone = window.matchMedia('(pointer: coarse) and (max-width: 767px)').matches;
+  if (onPhone && !installWasDismissed() && !document.querySelector('[data-chat]')) {
+    setTimeout(openInstallSheet, INSTALL_POPUP_DELAY_MS);
+  }
+};
 
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
   installPrompt = event;
-  installButtons.forEach((button) => { button.hidden = false; });
+  if (!isInstalled) offerInstall();
 });
 
-installButtons.forEach((button) => {
-  button.addEventListener('click', async () => {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    await installPrompt.userChoice;
-    installPrompt = null;
-    installButtons.forEach((other) => { other.hidden = true; });
-  });
+if (isIOS && !isInstalled) offerInstall();
+
+installMenuItem?.addEventListener('click', () => {
+  if (installPrompt) {
+    runInstallPrompt();
+  } else {
+    openInstallSheet();
+  }
 });
+installSheet?.querySelector('[data-install-accept]').addEventListener('click', () => {
+  if (installPrompt) runInstallPrompt();
+});
+installSheet?.querySelector('[data-install-dismiss]').addEventListener('click', () => closeInstallSheet(true));
 
 window.addEventListener('appinstalled', () => {
-  installButtons.forEach((button) => { button.hidden = true; });
+  closeInstallSheet(false);
+  if (installMenuItem) installMenuItem.hidden = true;
 });
-
-// iPhones have no install prompt, so they get instructions instead.
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-if (isIOS && !isInstalled) {
-  document.querySelectorAll('[data-ios-hint]').forEach((hint) => { hint.hidden = false; });
-}
 
 // Chat: checks for new messages every few seconds, only while the chat is on screen.
 const chat = document.querySelector('[data-chat]');

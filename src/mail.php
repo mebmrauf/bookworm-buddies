@@ -1,6 +1,10 @@
 <?php
 const VERIFY_HOURS = 24;
+const RESET_MINUTES = 60;
 const RESEND_WAIT_SECONDS = 60;
+// Resend's free plan allows 100 a day. Stopping early keeps a bot from using up the day's sends and more.
+const MAX_EMAILS_PER_DAY = 90;
+const MAX_VERIFY_EMAILS_PER_ADDRESS = 5;
 
 // Uses Resend's HTTPS API because hosts often block outgoing SMTP. Returns false on failure.
 function send_email($to, $subject, $html, $text) {
@@ -12,6 +16,11 @@ function send_email($to, $subject, $html, $text) {
     $resend = config('resend');
     if (empty($resend['EMAIL_PASS']) || empty($resend['EMAIL_FROM'])) {
         error_log('Email not sent: Resend is not configured.');
+        return false;
+    }
+
+    if (rate_limited('email:all', MAX_EMAILS_PER_DAY, 86400)) {
+        error_log('Email not sent: the daily limit was reached.');
         return false;
     }
 
@@ -44,7 +53,28 @@ function notify($to, $firstName, $subject, $line, $note = null, $path = '/reques
 }
 
 // Stores a fresh one-time link and emails it. Only a hash is stored, so a database leak exposes no working links.
+function send_password_reset($userID, $to, $firstName) {
+    $token = bin2hex(random_bytes(32));
+    run(
+        "UPDATE users SET reset_token_hash = ?, reset_expires_at = NOW() + INTERVAL " . RESET_MINUTES . " MINUTE WHERE userID = ?",
+        'si', hash('sha256', $token), $userID
+    );
+
+    $link = rtrim(config('app_url') ?: 'http://localhost:8000', '/') . "/reset-password.php?token=$token";
+    $name = htmlspecialchars($firstName);
+    $html = "<p>Hi $name,</p><p>Someone asked to reset your Bookworm Buddies password. To choose a new one, open this link:</p>"
+        . "<p><a href=\"$link\">$link</a></p><p>It works for " . RESET_MINUTES . " minutes. If this wasn't you, you can ignore this email and your password stays the same.</p>";
+    $text = "Hi $firstName,\n\nTo choose a new Bookworm Buddies password, open this link:\n$link\n\nIt works for " . RESET_MINUTES . " minutes. If this wasn't you, you can ignore this email and your password stays the same.";
+
+    return send_email($to, 'Reset your Bookworm Buddies password', $html, $text);
+}
+
 function send_verification($userID, $to, $firstName) {
+    // Also stops anyone from filling a stranger's inbox with confirmation links.
+    if (rate_limited('verify:to:' . md5(strtolower($to)), MAX_VERIFY_EMAILS_PER_ADDRESS, 86400)) {
+        return false;
+    }
+
     $token = bin2hex(random_bytes(32));
     run(
         "UPDATE users SET verify_token_hash = ?, verify_expires_at = NOW() + INTERVAL " . VERIFY_HOURS . " HOUR WHERE userID = ?",

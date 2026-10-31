@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../src/admin.php';
 
 const MAX_ATTEMPTS = 5;
+const MAX_ALL_ATTEMPTS = 20;
 
 $admin = admin_config();
 if (!$admin) {
@@ -17,7 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
     run("DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL 15 MINUTE");
     $attempts = run("SELECT COUNT(*) FROM login_attempts WHERE username = 'admin' AND ip = ?", 's', $ip)->get_result()->fetch_row()[0];
-    if ($attempts >= MAX_ATTEMPTS) {
+    // From every connection together too, so changing IP doesn't allow endless guesses.
+    if ($attempts >= MAX_ATTEMPTS || rate_limited('admin-login:all', MAX_ALL_ATTEMPTS, 900)) {
         flash('Too many failed attempts. Please try again in 15 minutes.', '/admin/login.php');
     }
 

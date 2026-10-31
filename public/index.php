@@ -31,14 +31,12 @@ include __DIR__ . '/../templates/top.php';
 ?>
 <section class="hero">
     <div class="hero__inner">
-        <h1>Your next favorite book is on a neighbor's shelf.</h1>
-        <p class="hero__lead">Borrow books from other readers, and lend the ones you've finished. It's free, and you can look around without an account.</p>
+        <h1>Every book deserves <em>another reader.</em></h1>
+        <p class="hero__lead">Borrow from book lovers near you, pass on the stories you've finished, and give every shelf a second life. It's free, and you can look around without an account.</p>
         <div class="actions">
             <a class="btn btn--primary btn--large" href="/home.php">Browse books</a>
             <a class="btn btn--light btn--large" href="/signup.php">Join free</a>
-            <button type="button" class="btn btn--on-image btn--large" data-install hidden>Install app</button>
         </div>
-        <p class="hero__hint" data-ios-hint hidden>To install on iPhone: tap the Share button in Safari, then "Add to Home Screen".</p>
     </div>
 </section>
 

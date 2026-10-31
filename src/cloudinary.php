@@ -1,6 +1,7 @@
 <?php
 const MAX_INPUT_BYTES = 10 * 1024 * 1024;
 const MAX_INPUT_PIXELS = 30000000; // Decoding larger images could exhaust the small server's memory.
+const MAX_UPLOADS_PER_DAY = 60;
 const CLOUDINARY_MAX_BYTES = 4500000; // The free plan's limit, as stated by the account owner.
 const HD_LONG_EDGE = 1280;
 const JPEG_QUALITIES = [82, 70, 55, 40];
@@ -98,6 +99,10 @@ function upload_image_field($field, $folder) {
     $upload = $_FILES[$field] ?? null;
     if (!$upload || !is_int($upload['error']) || $upload['error'] === UPLOAD_ERR_NO_FILE || !cloudinary_enabled()) {
         return null;
+    }
+    global $userID;
+    if (rate_limited("upload:user:$userID", MAX_UPLOADS_PER_DAY, 86400)) {
+        throw new ImageError('You have uploaded a lot of images today. Please try again tomorrow.');
     }
     if (in_array($upload['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) || $upload['size'] > MAX_INPUT_BYTES) {
         throw new ImageError('Image must be 10 MB or smaller.');
