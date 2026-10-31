@@ -103,6 +103,17 @@ switch ($do) {
         $done = 'Rating deleted.';
         break;
 
+    case 'delete_message':
+        // Only reported messages can reach this, and admins can't browse chats.
+        $reported = run("SELECT 1 FROM reports WHERE target_type = 'message' AND target_id = ?", 'i', $id)->get_result()->num_rows;
+        if (!$reported) {
+            flash('Only reported messages can be deleted.', $back);
+        }
+        run("DELETE FROM messages WHERE messageID = ?", 'i', $id);
+        admin_log('delete_message', 'message', $id);
+        $done = 'Message deleted.';
+        break;
+
     case 'resolve_report':
         run("UPDATE reports SET status = 'resolved', resolved_at = NOW() WHERE reportID = ?", 'i', $id);
         admin_log('resolve_report', 'report', $id);

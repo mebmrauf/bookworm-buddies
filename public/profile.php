@@ -72,7 +72,7 @@ include __DIR__ . '/../templates/top.php';
                 <?php if ($details): ?>
                     <p class="muted"><?= e(implode(' · ', $details)) ?></p>
                 <?php endif; ?>
-                <p class="help">Visitors can't see these. They're shared only with the other person in an accepted swap, as needed.</p>
+                <p class="help">Visitors can't see these. Use chat to arrange exchanges.</p>
             <?php endif; ?>
         </div>
         <?php if ($isOwn): ?>

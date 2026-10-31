@@ -225,6 +225,7 @@ check('signup: asks only name, email and password', str_contains($signupForm, 'n
 check('signup: the rules checkbox is required', (bool) preg_match('/name="agree"[^>]* required/', $signupForm) && str_contains($signupForm, '/rules.php'));
 $refused = $alice->post('signup.php', ['name' => 'No Agree', 'email' => test_email('noagree'), 'password' => 'correct-horse-1'], 'signup.php');
 check('signup: refused without agreeing to the rules', str_contains($refused, 'agree to the community rules') && !db("SELECT 1 FROM users WHERE email = ?", 's', test_email('noagree'))->num_rows);
+check('about: the page is public', str_contains($anon->get('about.php'), 'Get in touch') && $anon->code === 200);
 check('rules: the page is public', str_contains($anon->get('rules.php'), 'Community rules') && $anon->code === 200);
 check('signup: rejects a short password', str_contains(signup($alice, 'a', ['password' => 'short'], false), 'Password must be'));
 check('signup: rejects a bad email', str_contains(signup($alice, 'a', ['email' => 'nope'], false), 'valid email'));
@@ -448,12 +449,14 @@ $alice->post('actions/swap-update.php', ['swapID' => $swap, 'action' => 'return'
 check('swap: cannot return before accepting', swap_status($swap) === 'pending');
 $alice->post('actions/swap-update.php', ['swapID' => $swap, 'action' => 'accept']);
 check('swap: owner can accept', swap_status($swap) === 'accepted');
-check('swap: contact email shown after accepting', str_contains($bob->get('requests.php'), test_email('a')));
+check('swap: the chat link shows after accepting', str_contains($bob->get('requests.php'), "chat.php?swap=$swap"));
 $requesterView = $bob->get('requests.php');
-check('contact: requester sees owner email and mobile once accepted', str_contains($requesterView, test_email('a')) && str_contains($requesterView, '+8801700000001'));
+check('contact: email and mobile are never shared automatically', !str_contains($requesterView, test_email('a')) && !str_contains($requesterView, '+8801700000001'));
+check('contact: the requester gets a chat link instead', str_contains($requesterView, "chat.php?swap=$swap"));
 check('contact: requester never sees the owner address', !str_contains($requesterView, 'Owner Lane 1'));
 $ownerView = $alice->get('requests.php');
-check('contact: owner sees requester email and mobile once accepted', str_contains($ownerView, test_email('b')) && str_contains($ownerView, '+8801700000002'));
+check('contact: the owner sees no email or mobile either', !str_contains($ownerView, test_email('b')) && !str_contains($ownerView, '+8801700000002'));
+check('contact: the owner gets a chat link too', str_contains($ownerView, "chat.php?swap=$swap"));
 check('contact: a meet-up never shares the home address', !str_contains($ownerView, 'Requester Road 2'));
 check('contact: safety advice shows for a meet-up', str_contains($ownerView, 'meet in a public place'));
 check('contact: an unrelated user sees nothing', !$hasContact($carol->get('requests.php'), '+8801700000001', 'Owner Lane 1', test_email('a')));
@@ -816,9 +819,82 @@ check('rating: the book page shows the owner\'s score', str_contains($carol->get
 $rate($alice, $loanSwap, 5, 'Returned on time');
 check('rating: both people can rate', $countRatings($loanSwap) == 2);
 
-// ---- Reports
 $report = fn($browser, $type, $id, $reason = 'Spam or fake') => $browser->post('actions/report.php', ['type' => $type, 'id' => $id, 'reason' => $reason, 'details' => 'test']);
 $countReports = fn($type, $id) => db("SELECT COUNT(*) FROM reports WHERE target_type = ? AND target_id = ?", 'si', $type, $id)->fetch_row()[0];
+
+// ---- Chat
+$chatBook = $addListed($alice, "$tag chatbook", 'lend');
+$bob->post('actions/swap-request.php', ['bookID' => $chatBook]);
+$chatSwap = latest_swap($chatBook);
+$alice->get("chat.php?swap=$chatSwap");
+check('chat: closed while a request is pending', str_ends_with($alice->url, 'requests.php'));
+$send = function ($browser, $swapID, $body) {
+    preg_match('/name="csrf" value="(\w+)"/', $browser->get('settings.php'), $m);
+    return $browser->rawPost('actions/chat-send.php', ['csrf' => $m[1] ?? '', 'swapID' => $swapID, 'body' => $body]);
+};
+$countMessages = fn($swapID) => db("SELECT COUNT(*) FROM messages WHERE swapID = ?", 'i', $swapID)->fetch_row()[0];
+$send($bob, $chatSwap, 'too early');
+check('chat: no sending while pending', $countMessages($chatSwap) == 0);
+$alice->post('actions/swap-update.php', ['swapID' => $chatSwap, 'action' => 'accept']);
+$page = $alice->get("chat.php?swap=$chatSwap");
+check('chat: opens once accepted, for both people', str_contains($page, 'data-chat-form') && str_contains($bob->get("chat.php?swap=$chatSwap"), 'data-chat-form'));
+$carol->get("chat.php?swap=$chatSwap");
+check('chat: a stranger cannot open it', str_ends_with($carol->url, 'requests.php'));
+$strangerPoll = json_decode($carol->get("chat-messages.php?swap=$chatSwap"), true);
+check('chat: a stranger cannot read it', $carol->code === 404 && !isset($strangerPoll['messages']));
+(new Browser())->get("chat-messages.php?swap=$chatSwap");
+$send($carol, $chatSwap, 'intruder');
+check('chat: a stranger cannot post', $countMessages($chatSwap) == 0);
+$bob->get("actions/chat-send.php?swapID=$chatSwap&body=link");
+check('chat: a plain link cannot post', $countMessages($chatSwap) == 0);
+$bob->rawPost('actions/chat-send.php', ['csrf' => 'forged', 'swapID' => $chatSwap, 'body' => 'forged']);
+check('chat: a forged form cannot post', $countMessages($chatSwap) == 0);
+$send($bob, $chatSwap, str_repeat('x', 1001));
+check('chat: over 1000 characters is refused', $countMessages($chatSwap) == 0);
+$hello = "Meet at <script>alert(1)</script> & বই $tag";
+$send($bob, $chatSwap, $hello);
+$stored = db("SELECT messageID, senderID, body, read_at FROM messages WHERE swapID = ? ORDER BY messageID DESC LIMIT 1", 'i', $chatSwap)->fetch_assoc();
+check('chat: a message is saved exactly', ($stored['body'] ?? '') === $hello && $stored['senderID'] == $bobID && $stored['read_at'] === null);
+check('chat: the Requests badge shows it as unread', str_contains($alice->get('requests.php'), 'aria-label="1 new"'));
+$poll = json_decode($alice->get("chat-messages.php?swap=$chatSwap&after=0"), true);
+check('chat: new messages arrive by polling', ($poll['messages'][0]['body'] ?? '') === $hello && $poll['messages'][0]['mine'] === false && $poll['open'] === true);
+check('chat: reading marks it as read', db("SELECT read_at FROM messages WHERE messageID = ?", 'i', $stored['messageID'])->fetch_row()[0] !== null);
+$after = json_decode($alice->get("chat-messages.php?swap=$chatSwap&after={$stored['messageID']}"), true);
+check('chat: polling returns only newer messages', $after['messages'] === []);
+$page = $alice->get("chat.php?swap=$chatSwap");
+check('chat: the page shows it safely escaped', str_contains($page, htmlspecialchars($hello)) && !str_contains($page, '<script>alert'));
+preg_match('/name="csrf" value="(\w+)"/', $alice->get('settings.php'), $m);
+$alice->rawPost('actions/chat-send.php', ['csrf' => $m[1], 'swapID' => $chatSwap, 'body' => 'See you there']);
+check('chat: replies work', $countMessages($chatSwap) == 2);
+
+$report($carol, 'message', $stored['messageID']);
+check('chat: a stranger cannot report a message', $countReports('message', $stored['messageID']) == 0);
+$bobOwn = $stored['messageID'];
+$report($bob, 'message', $bobOwn);
+check('chat: you cannot report your own message', $countReports('message', $bobOwn) == 0);
+$report($alice, 'message', $bobOwn, 'Harassment');
+check('chat: a participant can report a message', $countReports('message', $bobOwn) == 1);
+
+$alice->post('actions/swap-update.php', ['swapID' => $chatSwap, 'action' => 'return']);
+$page = $bob->get("chat.php?swap=$chatSwap");
+check('chat: after the exchange it is read-only', str_contains($page, 'See you there') && !str_contains($page, 'data-chat-form') && str_contains($page, 'chat has ended'));
+$before = $countMessages($chatSwap);
+$send($bob, $chatSwap, 'too late');
+check('chat: no sending after the exchange', $countMessages($chatSwap) == $before);
+$poll = json_decode($bob->get("chat-messages.php?swap=$chatSwap"), true);
+check('chat: polling reports that it closed', $poll['open'] === false);
+
+$limitBook = $addListed($alice, "$tag limitbook", 'lend');
+$bob->post('actions/swap-request.php', ['bookID' => $limitBook]);
+$limitSwap = latest_swap($limitBook);
+$alice->post('actions/swap-update.php', ['swapID' => $limitSwap, 'action' => 'accept']);
+db("INSERT INTO messages (swapID, senderID, body) SELECT ?, ?, 'x' FROM (SELECT 1 FROM information_schema.tables LIMIT 20) t", 'ii', $limitSwap, $bobID);
+$countBefore = $countMessages($limitSwap);
+$send($bob, $limitSwap, 'one too many');
+check('chat: sending is limited per minute', $countMessages($limitSwap) == $countBefore);
+$alice->post('actions/swap-update.php', ['swapID' => $limitSwap, 'action' => 'return']);
+
+// ---- Reports
 check('report: the link shows on a book', str_contains($carol->get("book.php?id=$shown"), 'actions/report.php'));
 $anonReport = new Browser();
 $anonReport->rawPost('actions/report.php', ['type' => 'book', 'id' => $shown, 'reason' => 'Copyright']);
@@ -861,6 +937,13 @@ foreach (['index.php', 'users.php', 'books.php', 'reports.php', 'content.php', '
 $usersPage = $admin->get('admin/users.php?q=' . urlencode($tag));
 check('admin: finds users', str_contains($usersPage, "{$tag}b"));
 check('admin: never shows mobile, address or birth date', !str_contains($usersPage, '+880') && !str_contains($usersPage, 'Requester Road') && !str_contains($usersPage, '2000-01-15') && !str_contains($usersPage, '$2y$'));
+$reportsPage = $admin->get('admin/reports.php');
+check('admin: a reported chat message appears', str_contains($reportsPage, htmlspecialchars($hello)) && !str_contains($reportsPage, '<script>alert'));
+check('admin: chats that are not reported stay hidden', !str_contains($reportsPage, 'See you there') && !str_contains($admin->get('admin/content.php'), 'See you there') && !str_contains($admin->get('admin/log.php'), 'See you there'));
+$admin->post('admin/action.php', ['do' => 'delete_message', 'id' => db("SELECT messageID FROM messages WHERE body = 'See you there' AND swapID = ?", 'i', $chatSwap)->fetch_row()[0], 'reason' => ''], 'admin/index.php');
+check('admin: an unreported message cannot be deleted', db("SELECT 1 FROM messages WHERE body = 'See you there' AND swapID = ?", 'i', $chatSwap)->num_rows === 1);
+$admin->post('admin/action.php', ['do' => 'delete_message', 'id' => $bobOwn, 'reason' => ''], 'admin/index.php');
+check('admin: a reported message can be deleted', db("SELECT 1 FROM messages WHERE messageID = ?", 'i', $bobOwn)->num_rows === 0);
 check('admin: reports appear in the queue', str_contains($admin->get('admin/reports.php'), "$tag shown"));
 
 $adminDo = fn($do, $id, $reason = '') => $admin->post('admin/action.php', ['do' => $do, 'id' => $id, 'reason' => $reason], 'admin/index.php');

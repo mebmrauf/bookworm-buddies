@@ -34,12 +34,12 @@ function send_email($to, $subject, $html, $text) {
 }
 
 // Tells someone about a change on a request. Best effort: a mail failure must not undo their action.
-function notify($to, $firstName, $subject, $line, $note = null) {
-    $link = rtrim(config('app_url') ?: 'http://localhost:8000', '/') . '/requests.php';
+function notify($to, $firstName, $subject, $line, $note = null, $path = '/requests.php', $label = 'Open your requests') {
+    $link = rtrim(config('app_url') ?: 'http://localhost:8000', '/') . $path;
     $html = '<p>Hi ' . htmlspecialchars($firstName) . ',</p><p>' . htmlspecialchars($line) . '</p>'
         . ($note ? '<blockquote style="margin:0;padding:8px 12px;border-left:3px solid #a8431a">' . htmlspecialchars($note) . '</blockquote>' : '')
-        . "<p><a href=\"$link\" style=\"display:inline-block;padding:12px 20px;background:#a8431a;color:#ffffff;border-radius:8px;text-decoration:none\">Open your requests</a></p>";
-    $text = "Hi $firstName,\n\n$line\n" . ($note ? "\n\"$note\"\n" : '') . "\nOpen your requests: $link\n";
+        . "<p><a href=\"$link\" style=\"display:inline-block;padding:12px 20px;background:#a8431a;color:#ffffff;border-radius:8px;text-decoration:none\">$label</a></p>";
+    $text = "Hi $firstName,\n\n$line\n" . ($note ? "\n\"$note\"\n" : '') . "\n$label: $link\n";
     send_email($to, $subject, $html, $text);
 }
 

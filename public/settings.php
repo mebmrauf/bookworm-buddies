@@ -101,7 +101,7 @@ include __DIR__ . '/../templates/top.php';
             <div class="field">
                 <label for="email">Email</label>
                 <input id="email" type="email" name="email" maxlength="254" autocomplete="email" value="<?= e($user['email']) ?>" aria-describedby="email-help" required>
-                <p class="help" id="email-help">Only shared during an accepted swap. If you change it, we'll email a link to confirm the new address.</p>
+                <p class="help" id="email-help">Never shown to other members. If you change it, we'll email a link to confirm the new address.</p>
                 <?php if ($user['pending_email']): ?>
                     <p class="help">Waiting for you to confirm <?= e($user['pending_email']) ?>.</p>
                 <?php endif; ?>
@@ -130,7 +130,7 @@ include __DIR__ . '/../templates/top.php';
 
         <fieldset class="panel">
             <legend>Personal details</legend>
-            <p class="help">All optional. Your date of birth and gender stay private. Your mobile number is shared only during an accepted swap. Your address goes only to the owner of a book you've asked to receive by courier, once they accept.</p>
+            <p class="help">All optional, and other members can't see them. Your delivery address is the one exception: it goes to a book's owner only when they accept your courier request.</p>
             <div class="form__row">
                 <div class="field">
                     <label for="date_of_birth">Date of birth</label>
