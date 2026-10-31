@@ -7,6 +7,11 @@ document.querySelectorAll('form[data-confirm]').forEach((form) => {
   });
 });
 
+// Filters apply as soon as a choice is made.
+document.querySelectorAll('form[data-autosubmit] select').forEach((select) => {
+  select.addEventListener('change', () => select.form.submit());
+});
+
 // Stop double submits, which matter most while an image uploads.
 document.querySelectorAll('form[method="post"]').forEach((form) => {
   form.addEventListener('submit', (event) => {

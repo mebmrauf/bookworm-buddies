@@ -1,0 +1,10 @@
+.git
+.claude
+.vscode
+.DS_Store
+config.php
+ca.pem
+demo-accounts.txt
+tools
+database
+README.md

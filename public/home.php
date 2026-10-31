@@ -1,51 +1,88 @@
 <?php
-require_once __DIR__ . '/../src/auth.php';
+require_once __DIR__ . '/../src/bootstrap.php';
 
 const PER_PAGE = 24;
 
 $onlyAvailable = ($_GET['available'] ?? '') === '1';
 $availableFilter = $onlyAvailable ? "AND NOT EXISTS (SELECT 1 FROM swap s WHERE s.bookID = b.bookID AND s.status IN ('pending', 'accepted'))" : '';
+
+$cities = array_column(run("
+    SELECT DISTINCT u.city
+    FROM collection c JOIN users u ON c.userID = u.userID
+    WHERE c.showcase = 1 AND u.city IS NOT NULL AND u.userID != ?
+    ORDER BY u.city
+", 'i', $userID)->get_result()->fetch_all(), 0);
+
+$myCity = $userID ? run("SELECT city FROM users WHERE userID = ?", 'i', $userID)->get_result()->fetch_row()[0] ?? null : null;
+
+// People can only borrow what they can reach, so start with their own city when it has books.
+$requested = is_string($_GET['city'] ?? null) ? $_GET['city'] : null;
+$city = $requested === null ? (in_array($myCity, $cities, true) ? $myCity : '') : (in_array($requested, $cities, true) ? $requested : '');
+
 $from = "
     FROM collection c
     JOIN books b ON c.bookID = b.bookID
     JOIN users u ON c.userID = u.userID
-    WHERE c.showcase = 1 AND u.userID != ? $availableFilter
+    WHERE c.showcase = 1 AND u.userID != ? " . ($city !== '' ? 'AND u.city = ?' : '') . " $availableFilter
 ";
+$types = $city !== '' ? 'is' : 'i';
+$params = $city !== '' ? [$userID, $city] : [$userID];
 
-$total = run("SELECT COUNT(*) $from", 'i', $userID)->get_result()->fetch_row()[0];
+$total = run("SELECT COUNT(*) $from", $types, ...$params)->get_result()->fetch_row()[0];
 $pages = max(1, (int) ceil($total / PER_PAGE));
 $page = min($pages, max(1, (int) ($_GET['page'] ?? 1)));
 $offset = ($page - 1) * PER_PAGE;
 
 $books = run("
-    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, u.username, u.userID AS ownerID,
+    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.handover, u.username, u.userID AS ownerID, u.city, u.area,
         EXISTS (SELECT 1 FROM swap s WHERE s.bookID = b.bookID AND s.status IN ('pending', 'accepted')) AS unavailable
     $from
     ORDER BY b.bookID DESC
     LIMIT ? OFFSET ?
-", 'iii', $userID, PER_PAGE, $offset)->get_result();
+", $types . 'ii', ...[...$params, PER_PAGE, $offset])->get_result();
 
 $pageTitle = 'Browse books';
 $navActive = 'browse';
 include __DIR__ . '/../templates/top.php';
-$query = $onlyAvailable ? 'available=1&' : '';
+
+$url = fn($changes) => '/home.php?' . http_build_query($changes + ['city' => $city === '' ? 'all' : $city, 'available' => $onlyAvailable ? '1' : null]);
 ?>
+<?php if ($userID && !$myCity): ?>
+    <p class="notice notice--info"><a class="link" href="/settings.php">Add your city</a> to see books near you first, and to let others know where you are.</p>
+<?php endif; ?>
+
 <div class="page-head">
     <div>
         <h1>Browse books</h1>
-        <p class="muted"><?= (int) $total ?> <?= $total === 1 ? 'book' : 'books' ?> <?= $onlyAvailable ? 'ready to borrow' : 'shared by the community' ?></p>
+        <p class="muted"><?= (int) $total ?> <?= $total === 1 ? 'book' : 'books' ?><?= $city !== '' ? ' in ' . e($city) : ' across all cities' ?><?= $onlyAvailable ? ' ready to borrow' : '' ?></p>
     </div>
-    <div class="tabs" aria-label="Filter books">
-        <a href="/home.php"<?= $onlyAvailable ? '' : ' aria-current="page"' ?>>All books</a>
-        <a href="/home.php?available=1"<?= $onlyAvailable ? ' aria-current="page"' : '' ?>>Available now</a>
+    <div class="filters">
+        <form class="filters__city" action="/home.php" method="get" data-autosubmit>
+            <label for="city"><?= icon('pin') ?><span class="visually-hidden">City</span></label>
+            <select id="city" name="city">
+                <option value="all">All cities</option>
+                <?php foreach ($cities as $option): ?>
+                    <option value="<?= e($option) ?>"<?= $option === $city ? ' selected' : '' ?>><?= e($option) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <?php if ($onlyAvailable): ?><input type="hidden" name="available" value="1"><?php endif; ?>
+            <noscript><button class="btn btn--ghost" type="submit">Apply</button></noscript>
+        </form>
+        <div class="tabs" aria-label="Filter books">
+            <a href="<?= e($url(['available' => null])) ?>"<?= $onlyAvailable ? '' : ' aria-current="page"' ?>>All books</a>
+            <a href="<?= e($url(['available' => '1'])) ?>"<?= $onlyAvailable ? ' aria-current="page"' : '' ?>>Available now</a>
+        </div>
     </div>
 </div>
 
 <?php if ($total === 0): ?>
     <div class="empty">
-        <h2>No books found</h2>
-        <p class="muted">Be the first to share something from your shelf.</p>
-        <a class="btn btn--primary" href="/add-book.php">Add a book</a>
+        <h2>No books found<?= $city !== '' ? ' in ' . e($city) : '' ?></h2>
+        <p class="muted">Try another city, or be the first to share something from your shelf.</p>
+        <div class="actions">
+            <?php if ($city !== ''): ?><a class="btn btn--ghost" href="<?= e($url(['city' => 'all'])) ?>">See all cities</a><?php endif; ?>
+            <a class="btn btn--primary" href="/add-book.php">Add a book</a>
+        </div>
     </div>
 <?php else: ?>
     <div class="book-grid">
@@ -55,9 +92,9 @@ $query = $onlyAvailable ? 'available=1&' : '';
     </div>
     <?php if ($pages > 1): ?>
         <nav class="pagination" aria-label="Pages">
-            <?php if ($page > 1): ?><a class="btn btn--ghost" rel="prev" href="/home.php?<?= $query ?>page=<?= $page - 1 ?>">Previous</a><?php endif; ?>
+            <?php if ($page > 1): ?><a class="btn btn--ghost" rel="prev" href="<?= e($url(['page' => $page - 1])) ?>">Previous</a><?php endif; ?>
             <span class="muted">Page <?= $page ?> of <?= $pages ?></span>
-            <?php if ($page < $pages): ?><a class="btn btn--ghost" rel="next" href="/home.php?<?= $query ?>page=<?= $page + 1 ?>">Next</a><?php endif; ?>
+            <?php if ($page < $pages): ?><a class="btn btn--ghost" rel="next" href="<?= e($url(['page' => $page + 1])) ?>">Next</a><?php endif; ?>
         </nav>
     <?php endif; ?>
 <?php endif; ?>

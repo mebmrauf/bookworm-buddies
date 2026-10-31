@@ -1,22 +1,50 @@
 <?php
 // Each function returns an error message, or null when valid.
 
-function validate_user($firstName, $lastName, $email, $dob, $username) {
-    if ($firstName === '' || $lastName === '' || $email === '' || $dob === '' || $username === '') {
-        return 'All fields are required.';
+const GENDERS = ['Female', 'Male', 'Non-binary', 'Prefer not to say'];
+
+const HANDOVERS = ['meet' => 'Meet in person', 'courier' => 'Courier, receiver pays', 'both' => 'Meet in person or courier'];
+
+// Bangladesh's 64 districts, so people pick the same spelling and the city filter stays clean.
+const CITIES = [
+    'Bagerhat', 'Bandarban', 'Barguna', 'Barishal', 'Bhola', 'Bogura', 'Brahmanbaria', 'Chandpur', 'Chapainawabganj', 'Chittagong', 'Chuadanga',
+    'Cumilla', "Cox's Bazar", 'Dhaka', 'Dinajpur', 'Faridpur', 'Feni', 'Gaibandha', 'Gazipur', 'Gopalganj', 'Habiganj', 'Jamalpur', 'Jashore',
+    'Jhalokathi', 'Jhenaidah', 'Joypurhat', 'Khagrachhari', 'Khulna', 'Kishoreganj', 'Kurigram', 'Kushtia', 'Lakshmipur', 'Lalmonirhat', 'Madaripur',
+    'Magura', 'Manikganj', 'Meherpur', 'Moulvibazar', 'Munshiganj', 'Mymensingh', 'Naogaon', 'Narail', 'Narayanganj', 'Narsingdi', 'Natore', 'Netrokona',
+    'Nilphamari', 'Noakhali', 'Pabna', 'Panchagarh', 'Patuakhali', 'Pirojpur', 'Rajbari', 'Rajshahi', 'Rangamati', 'Rangpur', 'Satkhira', 'Shariatpur',
+    'Sherpur', 'Sirajganj', 'Sunamganj', 'Sylhet', 'Tangail', 'Thakurgaon',
+];
+
+function validate_location($city, $area) {
+    if ($city !== '' && !in_array($city, CITIES, true)) {
+        return 'Please choose a city from the list.';
+    }
+    if (mb_strlen($area) > 60) {
+        return 'Area can be at most 60 characters.';
+    }
+    return null;
+}
+
+function validate_name($firstName, $lastName) {
+    if ($firstName === '') {
+        return 'Please enter your name.';
     }
     if (mb_strlen($firstName) > 50 || mb_strlen($lastName) > 50) {
         return 'Names can be at most 50 characters.';
     }
-    if (!preg_match('/^[A-Za-z0-9_.-]{3,50}$/', $username)) {
-        return 'Username must be 3-50 letters, numbers, dots, dashes or underscores.';
-    }
+    return null;
+}
+
+function validate_email($email) {
     if (strlen($email) > 254 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return 'Please enter a valid email address.';
     }
-    $date = DateTime::createFromFormat('!Y-m-d', $dob);
-    if (!$date || $date->format('Y-m-d') !== $dob || $date > new DateTime()) {
-        return 'Please enter a valid date of birth.';
+    return null;
+}
+
+function validate_username($username) {
+    if (!preg_match('/^[A-Za-z0-9_.-]{3,50}$/', $username)) {
+        return 'Username must be 3-50 letters, numbers, dots, dashes or underscores.';
     }
     return null;
 }
@@ -25,6 +53,26 @@ function validate_password($password) {
     // bcrypt ignores anything past 72 bytes
     if (strlen($password) < 8 || strlen($password) > 72) {
         return 'Password must be 8-72 characters.';
+    }
+    return null;
+}
+
+// All of these are optional, so blank is always valid.
+function validate_details($dob, $gender, $mobile, $address) {
+    if ($dob !== '') {
+        $date = DateTime::createFromFormat('!Y-m-d', $dob);
+        if (!$date || $date->format('Y-m-d') !== $dob || $date > new DateTime()) {
+            return 'Please enter a valid date of birth.';
+        }
+    }
+    if ($gender !== '' && !in_array($gender, GENDERS, true)) {
+        return 'Please choose a gender from the list.';
+    }
+    if ($mobile !== '' && !preg_match('/^\+?[0-9][0-9 ()-]{5,18}$/', $mobile)) {
+        return 'Please enter a valid mobile number.';
+    }
+    if (mb_strlen($address) > 255) {
+        return 'Address can be at most 255 characters.';
     }
     return null;
 }

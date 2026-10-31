@@ -1,33 +1,56 @@
 <?php
 require_once __DIR__ . '/../src/auth.php';
 
-$user = run("SELECT first_name, last_name, email, date_of_birth, username, avatar_public_id, password FROM users WHERE userID = ?", 'i', $userID)->get_result()->fetch_assoc();
+$user = run("SELECT first_name, last_name, email, pending_email, username, city, area, date_of_birth, gender, mobile, address, avatar_public_id, password FROM users WHERE userID = ?", 'i', $userID)->get_result()->fetch_assoc();
 $currentHash = $user['password'];
+$currentEmail = $user['email'];
 $oldAvatar = $user['avatar_public_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf('/settings.php');
-    $user = ['first_name' => post('first_name'), 'last_name' => post('last_name'), 'email' => post('email'), 'date_of_birth' => post('date_of_birth'), 'username' => post('username')] + $user;
+    $user = [
+        'first_name' => post('first_name'), 'last_name' => post('last_name'), 'username' => post('username'), 'email' => post('email'), 'city' => post('city'), 'area' => post('area'),
+        'date_of_birth' => post('date_of_birth'), 'gender' => post('gender'), 'mobile' => post('mobile'), 'address' => post('address'),
+    ] + $user;
     $newPassword = post('new_password', false);
+    $emailChanged = strcasecmp($user['email'], $currentEmail) !== 0;
 
-    $error = validate_user($user['first_name'], $user['last_name'], $user['email'], $user['date_of_birth'], $user['username']);
+    $error = validate_name($user['first_name'], $user['last_name'])
+        ?? validate_username($user['username'])
+        ?? validate_email($user['email'])
+        ?? validate_location($user['city'], $user['area'])
+        ?? validate_details($user['date_of_birth'], $user['gender'], $user['mobile'], $user['address']);
+
     if (!$error && $newPassword !== '') {
         $error = validate_password($newPassword);
         if (!$error && !password_verify(post('current_password', false), $currentHash)) {
             $error = 'Your current password is incorrect.';
         }
     }
+    if (!$error && $emailChanged && run("SELECT 1 FROM users WHERE email = ?", 's', $user['email'])->get_result()->num_rows) {
+        $error = 'That email is already used.';
+    }
 
     if (!$error) {
         $hash = $newPassword === '' ? $currentHash : password_hash($newPassword, PASSWORD_DEFAULT);
+        // A new address only takes over once confirmed, so a typo can't lock anyone out.
+        $pendingEmail = $emailChanged ? $user['email'] : $user['pending_email'];
+        $optional = fn($value) => $value === '' ? null : $value;
         try {
             $avatar = upload_image_field('avatar', 'avatars') ?? (post('remove_avatar') === '1' ? null : $oldAvatar);
             run(
-                "UPDATE users SET first_name = ?, last_name = ?, email = ?, date_of_birth = ?, username = ?, password = ?, avatar_public_id = ? WHERE userID = ?",
-                'sssssssi', $user['first_name'], $user['last_name'], $user['email'], $user['date_of_birth'], $user['username'], $hash, $avatar, $userID
+                "UPDATE users SET first_name = ?, last_name = ?, username = ?, pending_email = ?, city = ?, area = ?, date_of_birth = ?, gender = ?, mobile = ?, address = ?, password = ?, avatar_public_id = ? WHERE userID = ?",
+                'ssssssssssssi', $user['first_name'], $user['last_name'], $user['username'], $pendingEmail, $optional($user['city']), $optional($user['area']),
+                $optional($user['date_of_birth']), $optional($user['gender']), $optional($user['mobile']), $optional($user['address']), $hash, $avatar, $userID
             );
             if ($avatar !== $oldAvatar) {
                 delete_images([$oldAvatar]);
+            }
+            if ($emailChanged) {
+                if (send_verification($userID, $user['email'], $user['first_name'])) {
+                    flash("Saved. Open the link we sent to {$user['email']} to finish changing your email.", '/profile.php', 'success');
+                }
+                flash('Your profile was saved, but we could not send the email confirmation. Please try again in a minute.', '/settings.php');
             }
             flash('Profile updated.', '/profile.php', 'success');
         } catch (ImageError $ex) {
@@ -36,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($ex->getCode() !== DUPLICATE_KEY) {
                 throw $ex;
             }
-            $error = 'That email or username is already used.';
+            $error = 'That username is already taken. Please choose another.';
         }
     }
 }
@@ -50,7 +73,7 @@ include __DIR__ . '/../templates/top.php';
     <form class="form" action="/settings.php" method="post" enctype="multipart/form-data">
         <?= csrf_field() ?>
         <fieldset class="panel">
-            <legend>Profile</legend>
+            <legend>Account</legend>
             <?php if (cloudinary_enabled()): ?>
                 <div class="field">
                     <label for="avatar">Profile photo <span class="optional">(optional)</span></label>
@@ -71,22 +94,70 @@ include __DIR__ . '/../templates/top.php';
                     <input id="first_name" type="text" name="first_name" maxlength="50" autocomplete="given-name" value="<?= e($user['first_name']) ?>" required>
                 </div>
                 <div class="field">
-                    <label for="last_name">Last name</label>
-                    <input id="last_name" type="text" name="last_name" maxlength="50" autocomplete="family-name" value="<?= e($user['last_name']) ?>" required>
+                    <label for="last_name">Last name <span class="optional">(optional)</span></label>
+                    <input id="last_name" type="text" name="last_name" maxlength="50" autocomplete="family-name" value="<?= e($user['last_name']) ?>">
                 </div>
             </div>
             <div class="field">
                 <label for="username">Username</label>
-                <input id="username" type="text" name="username" maxlength="50" autocomplete="username" value="<?= e($user['username']) ?>" required>
+                <input id="username" type="text" name="username" maxlength="50" autocomplete="username" value="<?= e($user['username']) ?>" aria-describedby="username-help" required>
+                <p class="help" id="username-help">Shown on your books and feedback. Must be unique: 3-50 letters, numbers, dots, dashes or underscores.</p>
             </div>
             <div class="field">
                 <label for="email">Email</label>
                 <input id="email" type="email" name="email" maxlength="254" autocomplete="email" value="<?= e($user['email']) ?>" aria-describedby="email-help" required>
-                <p class="help" id="email-help">Only shared with someone when you're both in an accepted swap.</p>
+                <p class="help" id="email-help">Only shared during an accepted swap. If you change it, we'll email a link to confirm the new address.</p>
+                <?php if ($user['pending_email']): ?>
+                    <p class="help">Waiting for you to confirm <?= e($user['pending_email']) ?>.</p>
+                <?php endif; ?>
+            </div>
+        </fieldset>
+
+        <fieldset class="panel">
+            <legend>Your location</legend>
+            <p class="help">Shown on your profile and books, so people nearby can find them. Never your full address.</p>
+            <div class="form__row">
+                <div class="field">
+                    <label for="city">City</label>
+                    <select id="city" name="city">
+                        <option value="">Not set</option>
+                        <?php foreach (CITIES as $option): ?>
+                            <option value="<?= e($option) ?>"<?= $user['city'] === $option ? ' selected' : '' ?>><?= e($option) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="area">Area <span class="optional">(optional)</span></label>
+                    <input id="area" type="text" name="area" maxlength="60" placeholder="For example: Dhanmondi" value="<?= e($user['area']) ?>">
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="panel">
+            <legend>Personal details</legend>
+            <p class="help">All optional. Your date of birth and gender stay private. Your mobile number is shared only during an accepted swap. Your address goes only to the owner of a book you've asked to receive by courier, once they accept.</p>
+            <div class="form__row">
+                <div class="field">
+                    <label for="date_of_birth">Date of birth</label>
+                    <input id="date_of_birth" type="date" name="date_of_birth" autocomplete="bday" value="<?= e($user['date_of_birth']) ?>">
+                </div>
+                <div class="field">
+                    <label for="gender">Gender</label>
+                    <select id="gender" name="gender">
+                        <option value="">Not set</option>
+                        <?php foreach (GENDERS as $option): ?>
+                            <option value="<?= e($option) ?>"<?= $user['gender'] === $option ? ' selected' : '' ?>><?= e($option) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
             <div class="field">
-                <label for="date_of_birth">Date of birth</label>
-                <input id="date_of_birth" type="date" name="date_of_birth" autocomplete="bday" value="<?= e($user['date_of_birth']) ?>" required>
+                <label for="mobile">Mobile number</label>
+                <input id="mobile" type="tel" name="mobile" maxlength="20" autocomplete="tel" value="<?= e($user['mobile']) ?>">
+            </div>
+            <div class="field">
+                <label for="address">Delivery address</label>
+                <textarea id="address" name="address" rows="2" maxlength="255" autocomplete="street-address"><?= e($user['address']) ?></textarea>
             </div>
         </fieldset>
 

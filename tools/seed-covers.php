@@ -58,7 +58,7 @@ function find_cover_ids($title, $author) {
 }
 
 $books = $conn->query("SELECT bookID, title, author FROM books WHERE cover_public_id IS NULL ORDER BY bookID")->fetch_all(MYSQLI_ASSOC);
-$save = $conn->prepare("UPDATE books SET cover_public_id = ? WHERE bookID = ?");
+$save = $conn->prepare("UPDATE books SET cover_public_id = ?, cover_credit = 'Open Library' WHERE bookID = ?");
 $added = 0;
 
 foreach ($books as $book) {

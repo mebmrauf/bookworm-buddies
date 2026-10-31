@@ -1,5 +1,10 @@
 <?php
-require_once __DIR__ . '/../src/auth.php';
+require_once __DIR__ . '/../src/bootstrap.php';
+
+if (!isset($_GET['userID']) && !$userID) {
+    $_SESSION['next'] = '/profile.php';
+    go('/signin.php');
+}
 
 $profileID = isset($_GET['userID']) ? (int) $_GET['userID'] : $userID;
 $isOwn = $profileID === $userID;
@@ -9,7 +14,7 @@ if ($isOwn) {
     $show = in_array($_GET['show'] ?? '', ['showcased', 'borrowed'], true) ? $_GET['show'] : 'all';
 }
 
-$user = run("SELECT first_name, last_name, email, date_of_birth, username, avatar_public_id FROM users WHERE userID = ?", 'i', $profileID)->get_result()->fetch_assoc();
+$user = run("SELECT first_name, last_name, email, date_of_birth, gender, mobile, address, username, avatar_public_id, city, area FROM users WHERE userID = ?", 'i', $profileID)->get_result()->fetch_assoc();
 
 $books = [];
 if ($user && $show === 'borrowed') {
@@ -44,8 +49,16 @@ include __DIR__ . '/../templates/top.php';
         <div class="profile-head__text">
             <h1><?= e($user['first_name'] . ' ' . $user['last_name']) ?></h1>
             <p class="muted">@<?= e($user['username']) ?></p>
+            <?php if (location_label($user) !== ''): ?>
+                <p class="muted book-card__where"><?= icon('pin') ?><?= e(location_label($user)) ?></p>
+            <?php endif; ?>
             <?php if ($isOwn): ?>
-                <p class="muted"><?= e($user['email']) ?> &middot; Born <?= e($user['date_of_birth']) ?></p>
+                <p class="muted"><?= e($user['email']) ?></p>
+                <?php $details = array_filter([$user['date_of_birth'] ? 'Born ' . $user['date_of_birth'] : null, $user['gender'], $user['mobile'], $user['address']]); ?>
+                <?php if ($details): ?>
+                    <p class="muted"><?= e(implode(' · ', $details)) ?></p>
+                <?php endif; ?>
+                <p class="help">Visitors can't see these. They're shared only with the other person in an accepted swap, as needed.</p>
             <?php endif; ?>
         </div>
         <?php if ($isOwn): ?>
@@ -56,7 +69,7 @@ include __DIR__ . '/../templates/top.php';
     <?php if ($isOwn): ?>
         <div class="tabs tabs--spaced" aria-label="Filter your books">
             <a href="/profile.php"<?= $show === 'all' ? ' aria-current="page"' : '' ?>>All books</a>
-            <a href="/profile.php?show=showcased"<?= $show === 'showcased' ? ' aria-current="page"' : '' ?>>Showcased</a>
+            <a href="/profile.php?show=showcased"<?= $show === 'showcased' ? ' aria-current="page"' : '' ?>>Shared</a>
             <a href="/profile.php?show=borrowed"<?= $show === 'borrowed' ? ' aria-current="page"' : '' ?>>Borrowed</a>
         </div>
     <?php else: ?>
@@ -65,7 +78,7 @@ include __DIR__ . '/../templates/top.php';
 
     <?php if (!$books): ?>
         <div class="empty">
-            <h2><?= $show === 'borrowed' ? 'Nothing borrowed right now' : 'No books yet' ?></h2>
+            <h2><?= $show === 'borrowed' ? 'Nothing borrowed right now' : ($isOwn ? 'Your shelf is empty' : 'No shared books yet') ?></h2>
             <?php if ($isOwn && $show === 'borrowed'): ?>
                 <a class="btn btn--primary" href="/home.php?available=1">Find a book</a>
             <?php elseif ($isOwn): ?>
