@@ -16,7 +16,7 @@ A community site for lending books: share what's on your shelf and borrow what y
 4. Start the site:
 
    ```bash
-   php -d upload_max_filesize=6M -d post_max_size=8M -S localhost:8000 -t public
+   php -d upload_max_filesize=10M -d post_max_size=12M -S localhost:8000 -t public
    ```
 
 ## Deploying to Render
@@ -33,7 +33,7 @@ If the database won't connect, check that the Aiven service's allowed IP address
 
 ## Deploying elsewhere
 
-Point the web server's document root at `public/`, so `config.php` and everything else stay out of reach. Set `app_url` in `config.php` to the site's public address, because email links are built from it. Use a Resend sender on a verified domain. Serve the site over HTTPS, and allow uploads of at least 6 MB (`upload_max_filesize` and `post_max_size`).
+Point the web server's document root at `public/`, so `config.php` and everything else stay out of reach. Set `app_url` in `config.php` to the site's public address, because email links are built from it. Use a Resend sender on a verified domain. Serve the site over HTTPS, and set `upload_max_filesize` to 10M and `post_max_size` to 12M. The GD extension is required, because photos are compressed to HD before they reach Cloudinary.
 
 ## Tests
 

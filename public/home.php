@@ -13,7 +13,7 @@ $cities = array_column(run("
     ORDER BY u.city
 ", 'i', $userID)->get_result()->fetch_all(), 0);
 
-$myCity = $userID ? run("SELECT city FROM users WHERE userID = ?", 'i', $userID)->get_result()->fetch_row()[0] ?? null : null;
+$myCity = current_user()['city'] ?? null;
 
 // People can only borrow what they can reach, so start with their own city when it has books.
 $requested = is_string($_GET['city'] ?? null) ? $_GET['city'] : null;

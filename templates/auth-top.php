@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e($pageTitle) ?> - Bookworm Buddies</title>
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
-    <link rel="stylesheet" href="/assets/app.css">
-    <script src="/assets/app.js" defer></script>
+    <link rel="preload" href="/assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="<?= asset('app.css') ?>">
+    <script src="<?= asset('app.js') ?>" defer></script>
 </head>
 <body class="auth">
+    <div class="loading-bar" aria-hidden="true"></div>
     <aside class="auth__aside">
         <div class="auth__pitch">
             <a class="brand brand--light" href="/"><?= icon('book') ?><span>Bookworm Buddies</span></a>

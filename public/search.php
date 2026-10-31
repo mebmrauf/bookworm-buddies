@@ -2,8 +2,7 @@
 require_once __DIR__ . '/../src/bootstrap.php';
 
 $q = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
-// % and _ are wildcards in LIKE, so a search for "%" must not match everything.
-$pattern = '%' . addcslashes($q, '%_\\') . '%';
+$pattern = like_pattern($q);
 
 $books = $people = null;
 if ($q !== '') {

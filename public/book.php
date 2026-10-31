@@ -40,14 +40,14 @@ $feedback = run("
     ORDER BY f.feedbackID
 ", 'i', $bookID)->get_result();
 
-$myAddress = $userID ? run("SELECT address FROM users WHERE userID = ?", 'i', $userID)->get_result()->fetch_row()[0] ?? null : null;
+$myAddress = current_user()['address'] ?? null;
 
 $pageTitle = $book['title'];
 $navActive = $isOwner ? 'library' : 'browse';
 include __DIR__ . '/../templates/top.php';
 ?>
 <article class="book-detail">
-    <div class="book-detail__cover"><?= book_cover($book, 400) ?></div>
+    <div class="book-detail__cover"><?= book_cover($book, '(min-width: 960px) 300px, (min-width: 640px) 240px, 60vw') ?></div>
     <div class="book-detail__info">
         <h1><?= e($book['title']) ?></h1>
         <p class="book-detail__author">by <?= e($book['author']) ?></p>

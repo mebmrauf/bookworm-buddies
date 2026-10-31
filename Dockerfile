@@ -1,7 +1,11 @@
 FROM php:8.4-apache
 
-RUN docker-php-ext-install mysqli opcache \
-    && a2enmod remoteip
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libjpeg62-turbo-dev libpng-dev libwebp-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && docker-php-ext-configure gd --with-jpeg --with-webp \
+    && docker-php-ext-install mysqli opcache gd exif \
+    && a2enmod remoteip headers
 
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 COPY docker/php.ini "$PHP_INI_DIR/conf.d/app.ini"

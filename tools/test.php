@@ -367,6 +367,7 @@ check('search: finds a showcased book by title', str_contains($bob->get('search.
 check('search: finds users', str_contains($bob->get("search.php?q={$tag}c"), "{$tag}c"));
 check('search: % is not a wildcard', str_contains($bob->get('search.php?q=' . urlencode("%{$tag}zzz%")), 'Nothing found'));
 check('search: 0 is a valid search', !str_contains($bob->get('search.php?q=0'), 'Please enter'));
+check('sql: run() refuses mismatched placeholders', (function () { try { run('SELECT ?', 'ii', 1, 2); return false; } catch (InvalidArgumentException $e) { return true; } })());
 check('search: output is escaped', !str_contains($bob->get('search.php?q=' . urlencode('<script>x</script>')), '<script>x'));
 
 // ---- Findings 5, 7, 8: swaps
@@ -457,6 +458,30 @@ $bob->post('actions/swap-request.php', ['bookID' => $shown]);
 $swap4 = latest_swap($shown);
 $bob->post('actions/swap-update.php', ['swapID' => $swap4, 'action' => 'cancel']);
 check('swap: requester can cancel', swap_status($swap4) === null);
+
+// A reused database connection must keep its character set.
+$bangla = 'বইটি খুব ভালো ' . $tag;
+for ($i = 0; $i < 3; $i++) {
+    $bob->post('actions/feedback-add.php', ['bookID' => $shown, 'comment' => $bangla]);
+}
+$stored = db("SELECT comment, HEX(comment) AS hex FROM feedback WHERE bookID = ? ORDER BY feedbackID DESC LIMIT 1", 'i', $shown)->fetch_assoc();
+check('charset: Bangla text survives a reused connection', ($stored['comment'] ?? '') === $bangla && $stored['hex'] === strtoupper(bin2hex($bangla)) && str_contains($bob->get("book.php?id=$shown"), $bangla));
+db("DELETE FROM feedback WHERE bookID = ?", 'i', $shown);
+
+// ---- Live search
+$suggest = fn($browser, $q) => json_decode($browser->get('search-suggest.php?q=' . urlencode($q)), true);
+$live = $suggest($bob, "$tag shown");
+check('live search: finds a book as you type', ($live['books'][0]['title'] ?? '') === "$tag shown" && $bob->code === 200);
+check('live search: a short query returns nothing', $suggest($bob, 'a') === ['books' => [], 'people' => []]);
+check('live search: hidden books stay hidden', $suggest($bob, "$tag hidden")['books'] === []);
+check('live search: the owner finds their hidden book', count($suggest($alice, "$tag hidden")['books']) === 1);
+check('live search: members can find people', ($suggest($bob, "{$tag}c")['people'][0]['username'] ?? '') === "{$tag}c");
+check('live search: guests can\'t find people', $suggest(new Browser(), "{$tag}c")['people'] === []);
+check('live search: no emails or private details', !preg_match('/@example|@resend|address|mobile/', $bob->get('search-suggest.php?q=' . urlencode($tag))));
+check('live search: wildcards are plain text', $suggest($bob, "%{$tag}zzz%")['books'] === []);
+check('live search: injection is plain text', $suggest($bob, "' OR 1=1 -- ")['books'] === [] && $bob->code === 200);
+check('live search: an array is refused safely', $bob->get('search-suggest.php?q[]=x') !== false && $bob->code === 200);
+check('live search: results are limited', count($suggest($bob, 'the')['books']) <= 6);
 
 // ---- Handover choice, note and courier
 $shareForm = $alice->get('add-book.php');
@@ -575,9 +600,50 @@ if (cloudinary_enabled()) {
     file_put_contents($fake, '<?php echo "not an image";');
     check('upload: a fake image is refused', str_contains($alice->upload('add-book.php', $bookFields, ['cover' => $fake], 'add-book.php'), 'JPG, PNG or WebP'));
     $big = tempnam(sys_get_temp_dir(), 'bw') . '.png';
-    file_put_contents($big, str_repeat('x', 5 * 1024 * 1024 + 1024));
-    check('upload: an oversized image is refused', str_contains($alice->upload('add-book.php', $bookFields, ['cover' => $big], 'add-book.php'), '5 MB or smaller'));
+    file_put_contents($big, str_repeat('x', 10 * 1024 * 1024 + 1024));
+    check('upload: an oversized image is refused', str_contains($alice->upload('add-book.php', $bookFields, ['cover' => $big], 'add-book.php'), '10 MB or smaller'));
     check('upload: refused images do not create a book', db("SELECT COUNT(*) FROM books WHERE title = ?", 's', "$tag photo")->fetch_row()[0] == 1);
+
+    // Random pixels don't compress well, so this is a worst case for the size limit.
+    $noisy = imagecreatetruecolor(1800, 1400);
+    for ($y = 0; $y < 1400; $y++) {
+        for ($x = 0; $x < 1800; $x++) {
+            imagesetpixel($noisy, $x, $y, random_int(0, 0xFFFFFF));
+        }
+    }
+    $largeFile = tempnam(sys_get_temp_dir(), 'bw') . '.png';
+    imagepng($noisy, $largeFile);
+    check('compress: the test photo is over the limit and over HD', filesize($largeFile) > CLOUDINARY_MAX_BYTES && filesize($largeFile) <= MAX_INPUT_BYTES);
+    $alice->upload("edit-book.php?id=$photoBook", $bookFields, ['cover' => $largeFile], "edit-book.php?id=$photoBook");
+    $hdID = book_image($photoBook);
+    $hdAsset = $hdID ? cloudinary_asset($hdID) : null;
+    check('compress: the long edge is cut to HD', ($hdAsset['width'] ?? 9999) === 1280 && ($hdAsset['height'] ?? 0) === 996);
+    check('compress: the stored file fits the limit', ($hdAsset['bytes'] ?? PHP_INT_MAX) <= CLOUDINARY_MAX_BYTES);
+    check('compress: it is stored as a JPEG', ($hdAsset['format'] ?? '') === 'jpg');
+
+    $small = imagecreatetruecolor(100, 150);
+    imagesavealpha($small, true);
+    imagefill($small, 0, 0, imagecolorallocatealpha($small, 0, 0, 0, 127));
+    $smallFile = tempnam(sys_get_temp_dir(), 'bw') . '.png';
+    imagepng($small, $smallFile);
+    $alice->upload("edit-book.php?id=$photoBook", $bookFields, ['cover' => $smallFile], "edit-book.php?id=$photoBook");
+    $smallAsset = cloudinary_asset((string) book_image($photoBook));
+    check('compress: small images are not enlarged', ($smallAsset['width'] ?? 0) === 100);
+    $flat = imagecreatefromstring(file_get_contents($smallAsset['secure_url'] ?? ''));
+    check('compress: transparency becomes white, not black', $flat && (imagecolorat($flat, 50, 75) & 0xFFFFFF) > 0xF0F0F0);
+
+    // A phone stores a sideways photo plus a note to rotate it. This builds that note by hand: EXIF orientation 6.
+    $tall = imagecreatetruecolor(200, 100);
+    ob_start();
+    imagejpeg($tall);
+    $jpeg = ob_get_clean();
+    $tiff = "MM\x00\x2A\x00\x00\x00\x08\x00\x01\x01\x12\x00\x03\x00\x00\x00\x01\x00\x06\x00\x00\x00\x00\x00\x00";
+    $exif = "Exif\x00\x00" . $tiff;
+    $rotatedFile = tempnam(sys_get_temp_dir(), 'bw') . '.jpg';
+    file_put_contents($rotatedFile, "\xFF\xD8\xFF\xE1" . pack('n', strlen($exif) + 2) . $exif . substr($jpeg, 2));
+    $alice->upload("edit-book.php?id=$photoBook", $bookFields, ['cover' => $rotatedFile], "edit-book.php?id=$photoBook");
+    $rotated = cloudinary_asset((string) book_image($photoBook));
+    check('compress: a sideways phone photo is turned upright', ($rotated['width'] ?? 0) === 100 && ($rotated['height'] ?? 0) === 200);
 
     $alice->upload("edit-book.php?id=$photoBook", $bookFields, ['cover' => $red], "edit-book.php?id=$photoBook");
     $third = book_image($photoBook);

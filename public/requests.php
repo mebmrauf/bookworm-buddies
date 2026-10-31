@@ -30,7 +30,7 @@ function swap_card($swap, $isOwner) {
     $isCourier = $swap['handover'] === 'courier';
     ?>
     <article class="swap">
-        <a class="swap__cover" href="/book.php?id=<?= (int) $swap['bookID'] ?>" tabindex="-1" aria-hidden="true"><?= book_cover($swap, 120) ?></a>
+        <a class="swap__cover" href="/book.php?id=<?= (int) $swap['bookID'] ?>" tabindex="-1" aria-hidden="true"><?= book_cover($swap, '88px') ?></a>
         <div class="swap__body">
             <div class="swap__head">
                 <h3><a href="/book.php?id=<?= (int) $swap['bookID'] ?>"><?= e($swap['title']) ?></a></h3>
