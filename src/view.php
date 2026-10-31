@@ -74,6 +74,41 @@ function upload_box($field, $previewAlt, $currentHtml = null, $round = false, $h
         . '</div>';
 }
 
+function stars_label($average, $count) {
+    if (!$count) {
+        return 'No ratings yet';
+    }
+    return '★ ' . number_format((float) $average, 1) . ' (' . (int) $count . ' ' . ($count == 1 ? 'rating' : 'ratings') . ')';
+}
+
+function report_form($type, $id) {
+    ob_start();
+    ?>
+    <details class="report">
+        <summary>Report</summary>
+        <form class="form" action="/actions/report.php" method="post">
+            <?= csrf_field() ?>
+            <input type="hidden" name="type" value="<?= e($type) ?>">
+            <input type="hidden" name="id" value="<?= (int) $id ?>">
+            <div class="field">
+                <label for="reason-<?= e($type . $id) ?>">What's wrong?</label>
+                <select id="reason-<?= e($type . $id) ?>" name="reason" required>
+                    <?php foreach (REPORT_REASONS as $reason): ?>
+                        <option value="<?= e($reason) ?>"><?= e($reason) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="field">
+                <label for="details-<?= e($type . $id) ?>">More details <span class="optional">(optional)</span></label>
+                <textarea id="details-<?= e($type . $id) ?>" name="details" rows="2" maxlength="500"></textarea>
+            </div>
+            <div><button type="submit" class="btn btn--ghost">Send report</button></div>
+        </form>
+    </details>
+    <?php
+    return ob_get_clean();
+}
+
 function location_label($person) {
     return implode(', ', array_filter([$person['area'] ?? null, $person['city'] ?? null]));
 }

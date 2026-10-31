@@ -7,10 +7,11 @@ $bookID = (int) post('bookID');
 $message = post('message');
 
 $book = run("
-    SELECT b.title, b.handover, u.userID, u.email, u.first_name
+    SELECT b.title, b.handover, b.listing_type, u.userID, u.email, u.first_name
     FROM collection c JOIN books b ON c.bookID = b.bookID JOIN users u ON c.userID = u.userID
-    WHERE c.bookID = ? AND c.showcase = 1
-", 'i', $bookID)->get_result()->fetch_assoc();
+    WHERE c.bookID = ? AND " . VISIBLE_BOOK,
+    'i', $bookID
+)->get_result()->fetch_assoc();
 
 if (!$book) {
     flash('That book is not available.', '/home.php?available=1');
@@ -34,8 +35,30 @@ if ($handover === 'courier' && !$me['address']) {
     flash('Please add your delivery address first. The owner sees it only if they accept a courier request.', '/settings.php');
 }
 
+$busy = fn($id) => run("SELECT 1 FROM books b WHERE b.bookID = ? AND " . BOOK_BUSY, 'i', $id)->get_result()->num_rows;
+if ($busy($bookID)) {
+    flash('That book is not available.', '/home.php?available=1');
+}
+
+$offeredID = null;
+$offeredTitle = null;
+if ($book['listing_type'] === 'swap') {
+    $offeredID = (int) post('offeredID');
+    $offered = run("
+        SELECT b.title FROM collection c JOIN books b ON c.bookID = b.bookID
+        WHERE c.bookID = ? AND c.userID = ? AND c.showcase = 1
+    ", 'ii', $offeredID, $userID)->get_result()->fetch_assoc();
+    if (!$offered || $busy($offeredID)) {
+        flash('Please choose one of your shared, available books to offer.', $bookURL);
+    }
+    $offeredTitle = $offered['title'];
+}
+
 try {
-    run("INSERT INTO swap (requesterID, ownerID, bookID, status, handover, message) VALUES (?, ?, ?, 'pending', ?, ?)", 'iiiss', $userID, $book['userID'], $bookID, $handover, $message === '' ? null : $message);
+    run(
+        "INSERT INTO swap (requesterID, ownerID, bookID, status, kind, offered_bookID, handover, message) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)",
+        'iiisiss', $userID, $book['userID'], $bookID, $book['listing_type'], $offeredID, $handover, $message === '' ? null : $message
+    );
 } catch (mysqli_sql_exception $ex) {
     if ($ex->getCode() !== DUPLICATE_KEY) {
         throw $ex;
@@ -43,5 +66,10 @@ try {
     flash('That book is not available.', '/home.php?available=1');
 }
 
-notify($book['email'], $book['first_name'], "New request for {$book['title']}", "{$me['username']} would like to borrow {$book['title']} (" . HANDOVERS[$handover] . ').', $message ?: null);
+$wants = [
+    'lend' => "would like to borrow {$book['title']}",
+    'give' => "would like to take {$book['title']}, which you're giving away",
+    'swap' => "would like to swap {$offeredTitle} for {$book['title']}",
+][$book['listing_type']];
+notify($book['email'], $book['first_name'], "New request for {$book['title']}", "{$me['username']} $wants (" . HANDOVERS[$handover] . ').', $message ?: null);
 flash('Request sent. We emailed the owner, and you will hear back here and by email.', '/requests.php', 'success');

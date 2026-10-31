@@ -5,10 +5,10 @@ if ($userID) {
     go('/home.php');
 }
 
-$showcased = "FROM collection c JOIN books b ON c.bookID = b.bookID JOIN users u ON c.userID = u.userID WHERE c.showcase = 1";
+$showcased = "FROM collection c JOIN books b ON c.bookID = b.bookID JOIN users u ON c.userID = u.userID WHERE " . VISIBLE_BOOK;
 
 $books = run("
-    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, u.username, u.userID AS ownerID, u.city, u.area
+    SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, u.username, u.userID AS ownerID, u.city, u.area
     $showcased
     ORDER BY b.cover_public_id IS NULL, b.bookID DESC
     LIMIT 12
@@ -54,11 +54,11 @@ include __DIR__ . '/../templates/top.php';
             </li>
             <li>
                 <h3>Send a request</h3>
-                <p class="muted">Create a free account and choose how you'd like to get it. The owner decides whether to accept.</p>
+                <p class="muted">Borrow it, swap one of yours for it, or take a free one. The owner decides whether to accept.</p>
             </li>
             <li>
                 <h3>Hand over and read</h3>
-                <p class="muted">Once accepted, you can contact each other. Meet somewhere public, or use a courier if you live far apart. Return it when you're done.</p>
+                <p class="muted">Once accepted, you can contact each other. Meet somewhere public, or use a courier if you live far apart. Then rate each other, so the community knows who to trust.</p>
             </li>
         </ol>
     </div>

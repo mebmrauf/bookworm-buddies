@@ -12,6 +12,9 @@ $where = location_label($book);
     <?php if ($where !== ''): ?>
         <p class="book-card__meta book-card__where"><?= icon('pin') ?><?= e($where) ?></p>
     <?php endif; ?>
+    <?php if (isset($book['listing_type'])): ?>
+        <span class="tag tag--<?= e($book['listing_type']) ?>"><?= e(['lend' => 'To borrow', 'give' => 'Free to keep', 'swap' => 'To swap'][$book['listing_type']]) ?></span>
+    <?php endif; ?>
     <?php if (isset($book['username'])): ?>
         <p class="book-card__meta">Shared by <a class="link" href="/profile.php?userID=<?= (int) $book['ownerID'] ?>"><?= e($book['username']) ?></a></p>
     <?php endif; ?>

@@ -19,6 +19,27 @@ A community site for lending books: share what's on your shelf and borrow what y
    php -d upload_max_filesize=10M -d post_max_size=12M -S localhost:8000 -t public
    ```
 
+## Admin
+
+The admin area is at `/admin`, and it doesn't exist until you configure it:
+
+1. Create a password hash (at least 12 characters):
+
+   ```bash
+   php tools/hash-password.php
+   ```
+
+2. Add your email and the hash to the `admin` block in `config.php`.
+
+## Return reminders
+
+Render's free plan has no scheduled jobs, so an outside service calls a secret link once a day:
+
+1. Set `cron_token` in `config.php` to a long random value, for example from `openssl rand -hex 32`.
+2. At a free scheduler such as cron-job.org, add a daily call to `https://your-site/cron.php?token=YOUR_TOKEN`.
+
+The admin dashboard also has a button to send reminders by hand.
+
 ## Deploying to Render
 
 The repo includes a `Dockerfile` and `render.yaml` for Render's free plan.

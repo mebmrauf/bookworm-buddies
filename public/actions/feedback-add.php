@@ -6,7 +6,7 @@ require_post('/home.php');
 $bookID = (int) post('bookID');
 $comment = post('comment');
 
-$owner = run("SELECT userID FROM collection WHERE bookID = ? AND showcase = 1", 'i', $bookID)->get_result()->fetch_assoc();
+$owner = run("SELECT c.userID FROM collection c JOIN users u ON c.userID = u.userID WHERE c.bookID = ? AND " . VISIBLE_BOOK, 'i', $bookID)->get_result()->fetch_assoc();
 if (!$owner) {
     flash('That book was not found.', '/home.php');
 }
