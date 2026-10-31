@@ -68,5 +68,6 @@ include __DIR__ . '/../templates/top.php';
     <h2>Got books gathering dust?</h2>
     <p class="muted">Put them on your shelf and let someone else enjoy them. Your contact details stay private until a request is accepted.</p>
     <a class="btn btn--primary btn--large" href="/signup.php">Create a free account</a>
+    <a class="link" href="/rules.php">Rules and policies</a>
 </section>
 <?php include __DIR__ . '/../templates/bottom.php'; ?>

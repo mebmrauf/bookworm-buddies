@@ -36,7 +36,7 @@ if (!$user['email_verified_at']) {
 }
 
 if ($user['suspended_at']) {
-    flash('This account is suspended: ' . $user['suspended_reason'] . ' See the community rules for how to get in touch.', '/signin.php');
+    flash('This account is suspended: ' . $user['suspended_reason'] . ' See the rules and policies page for how to ask us to look again.', '/signin.php');
 }
 
 session_regenerate_id(true);

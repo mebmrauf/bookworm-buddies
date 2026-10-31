@@ -49,6 +49,7 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
                     <div class="menu__panel">
                         <p class="menu__name"><?= e($me['first_name'] . ' ' . $me['last_name']) ?></p>
                         <a href="/settings.php"><?= icon('settings') ?>Settings</a>
+                        <a href="/rules.php"><?= icon('book') ?>Rules and policies</a>
                         <form action="/actions/logout.php" method="post">
                             <?= csrf_field() ?>
                             <button type="submit"><?= icon('logout') ?>Log out</button>
