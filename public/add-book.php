@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             run("INSERT INTO books (title, author, year_published, cover_public_id, handover, listing_type) VALUES (?, ?, ?, ?, ?, ?)", 'ssisss', $values['title'], $values['author'], $values['year_published'], $cover, $values['handover'], $values['listing_type']);
             $newID = $conn->insert_id;
             run("INSERT INTO collection (userID, bookID, showcase, city) VALUES (?, ?, ?, ?)", 'iiis', $userID, $newID, $share ? 1 : 0, current_user()['city']);
+            link_book_rating($newID);
             $conn->commit();
             flash($share ? 'Book added and shared.' : 'Book added. Only you can see it for now.', "/book.php?id=$newID", 'success');
         } catch (ImageError $ex) {

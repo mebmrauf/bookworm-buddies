@@ -2,6 +2,15 @@
 // Each function returns an error message, or null when valid.
 
 
+// Copies of the same book share one rating, but titles are typed by hand. This treats "The Hobbit" and
+// "Hobbit: There and Back Again" by "J.R.R. Tolkien" or "JRR Tolkien" as one book.
+function book_key($title, $author) {
+    $title = preg_split('/\s*[:(]|\s+-\s+/u', mb_strtolower(trim($title)), 2)[0];
+    $title = preg_replace('/^(the|a|an)\s+/u', '', $title);
+    $clean = fn($text) => preg_replace('/[^\p{L}\p{N}]+/u', '', $text);
+    return md5($clean($title) . '|' . $clean(mb_strtolower($author)));
+}
+
 const LISTING_TYPES = ['lend' => 'Lend', 'give' => 'Give away', 'swap' => 'Swap'];
 
 const LISTING_DESCRIPTIONS = [

@@ -39,6 +39,10 @@ switch ($action) {
             $refuse();
         }
         run("DELETE FROM swap WHERE swapID = ? AND status = 'pending'", 'i', $swapID);
+        // A withdrawn request stops counting, unless this reader also asked for the book before.
+        if (!run("SELECT 1 FROM swap WHERE bookID = ? AND requesterID = ? LIMIT 1", 'ii', $swap['bookID'], $userID)->get_result()->num_rows) {
+            run("UPDATE collection SET request_count = GREATEST(request_count - 1, 0) WHERE bookID = ?", 'i', $swap['bookID']);
+        }
         break;
 
     case 'decline':

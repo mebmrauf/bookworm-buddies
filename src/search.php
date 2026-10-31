@@ -9,7 +9,7 @@ function search_books($q, $userID, $limit) {
         ? "SELECT bookID FROM books WHERE MATCH (title, author) AGAINST (? IN BOOLEAN MODE) LIMIT " . SEARCH_CANDIDATES
         : "SELECT bookID FROM books WHERE title LIKE ? LIMIT " . SEARCH_CANDIDATES;
     return run("
-        SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, u.userID AS ownerID, u.username, u.city, u.area
+        SELECT b.bookID, b.title, b.author, b.year_published, b.cover_public_id, b.listing_type, c.rating_avg, c.rating_count, u.userID AS ownerID, u.username, u.city, u.area
         FROM ($candidates) m
         JOIN books b ON b.bookID = m.bookID
         JOIN collection c ON b.bookID = c.bookID

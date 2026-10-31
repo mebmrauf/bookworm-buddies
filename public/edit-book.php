@@ -23,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $cover = upload_image_field('cover', 'covers') ?? (post('remove_cover') === '1' ? null : $oldCover);
             run("UPDATE books SET title = ?, author = ?, year_published = ?, handover = ?, listing_type = ?, cover_public_id = ?, cover_credit = IF(? <=> ?, cover_credit, NULL) WHERE bookID = ?", 'ssisssssi', $values['title'], $values['author'], $values['year_published'], $values['handover'], $values['listing_type'], $cover, $cover, $oldCover, $bookID);
+            link_book_rating($bookID);
             if ($cover !== $oldCover) {
                 delete_images([$oldCover]);
             }

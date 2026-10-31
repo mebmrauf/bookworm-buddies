@@ -6,6 +6,7 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 require __DIR__ . '/../src/db.php';
+require __DIR__ . '/../src/validation.php';
 
 if ($conn->query("SELECT COUNT(*) FROM users")->fetch_row()[0] > 0) {
     exit("The database already has users. Nothing was changed.\n");
@@ -131,7 +132,7 @@ $conn->begin_transaction();
 
 $addUser = $conn->prepare("INSERT INTO users (username, password, email, first_name, last_name, email_verified_at, rules_accepted_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())");
 $addBook = $conn->prepare("INSERT INTO books (title, author, year_published) VALUES (?, ?, ?)");
-$addCopy = $conn->prepare("INSERT INTO collection (userID, bookID, showcase) VALUES (?, ?, ?)");
+$addCopy = $conn->prepare("INSERT INTO collection (userID, bookID, showcase, book_key) VALUES (?, ?, ?, ?)");
 $addSwap = $conn->prepare("INSERT INTO swap (requesterID, ownerID, bookID, status) VALUES (?, ?, ?, ?)");
 $addFeedback = $conn->prepare("INSERT INTO feedback (userID, bookID, comment, reply) VALUES (?, ?, ?, ?)");
 
@@ -152,7 +153,8 @@ foreach ($people as $username => [$first, $last, $list]) {
         $addBook->bind_param('ssi', $title, $author, $year);
         $addBook->execute();
         $bookID = $conn->insert_id;
-        $addCopy->bind_param('iii', $userIDs[$username], $bookID, $showcase);
+        $key = book_key($title, $author);
+        $addCopy->bind_param('iiis', $userIDs[$username], $bookID, $showcase, $key);
         $addCopy->execute();
         $books[$title] = ['id' => $bookID, 'owner' => $username, 'showcase' => $showcase];
     }
