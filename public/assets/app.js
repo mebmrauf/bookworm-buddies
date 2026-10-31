@@ -284,3 +284,54 @@ if (searchInput && searchPanel) {
     if (!event.target.closest('.search')) closePanel();
   });
 }
+
+// Show or hide a password.
+document.querySelectorAll('[data-password-toggle]').forEach((toggle) => {
+  const input = toggle.parentElement.querySelector('input');
+  toggle.addEventListener('click', () => {
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    toggle.setAttribute('aria-pressed', String(show));
+    toggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    toggle.querySelector('[data-eye-show]').hidden = show;
+    toggle.querySelector('[data-eye-hide]').hidden = !show;
+    input.focus();
+  });
+});
+
+// Installing as a phone app.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {
+    // Only the offline page depends on this, so the site works without it.
+  });
+}
+
+const isInstalled = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const installButtons = document.querySelectorAll('[data-install]');
+let installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  installPrompt = event;
+  installButtons.forEach((button) => { button.hidden = false; });
+});
+
+installButtons.forEach((button) => {
+  button.addEventListener('click', async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+    installButtons.forEach((other) => { other.hidden = true; });
+  });
+});
+
+window.addEventListener('appinstalled', () => {
+  installButtons.forEach((button) => { button.hidden = true; });
+});
+
+// iPhones have no install prompt, so they get instructions instead.
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+if (isIOS && !isInstalled) {
+  document.querySelectorAll('[data-ios-hint]').forEach((hint) => { hint.hidden = false; });
+}

@@ -167,6 +167,22 @@ foreach (['config.php', 'ca.pem', 'demo-accounts.txt', 'database/schema.sql', 's
     check("web: $file is not served", !preg_match('/<\?php|BEGIN CERTIFICATE|CREATE TABLE|username  password/', $body));
 }
 
+// ---- Phone app
+$manifest = json_decode($anon->get('manifest.json'), true);
+check('pwa: the manifest is valid', $anon->code === 200 && ($manifest['name'] ?? '') === 'Bookworm Buddies' && ($manifest['display'] ?? '') === 'standalone' && ($manifest['start_url'] ?? '') === '/home.php');
+$sizes = [];
+foreach ($manifest['icons'] ?? [] as $icon) {
+    $data = (new Browser())->get(ltrim($icon['src'], '/'));
+    $info = @getimagesizefromstring($data);
+    $sizes[] = $info && "{$info[0]}x{$info[1]}" === $icon['sizes'] ? $icon['purpose'] . $info[0] : 'bad';
+}
+check('pwa: icons exist at their stated sizes', $sizes === ['any192', 'any512', 'maskable512']);
+$worker = $anon->get('sw.js');
+check('pwa: the service worker is served, and never stores pages', $anon->code === 200 && str_contains($worker, "cache.add(OFFLINE_URL)") && substr_count($worker, 'cache.add') === 1 && !str_contains($worker, 'cache.put'));
+check('pwa: the offline page exists', str_contains($anon->get('offline.html'), "You're offline") && $anon->code === 200);
+$home = $anon->get('');
+check('pwa: pages link the manifest and icons', str_contains($home, 'rel="manifest"') && str_contains($home, 'apple-touch-icon') && str_contains($home, 'data-install'));
+
 // ---- Guests can look around
 $html = $anon->get('');
 check('guest: landing page loads', $anon->code === 200 && str_contains($html, 'How it works') && str_contains($html, 'Join free'));
