@@ -77,6 +77,7 @@ include __DIR__ . '/../templates/top.php';
                 <h2><a href="/post.php?id=<?= (int) $post['postID'] ?>"><?= e($post['title']) ?></a></h2>
                 <p class="muted">On <?= e($post['book_title']) ?> by <?= e($post['book_author']) ?></p>
                 <p><?= e($post['excerpt']) ?></p>
+                <a class="link post-card__more" href="/post.php?id=<?= (int) $post['postID'] ?>" aria-label="Read the full post: <?= e($post['title']) ?>">Read the full post</a>
                 <p class="muted">By <a class="link" href="/profile.php?userID=<?= (int) $post['userID'] ?>"><?= e($post['username']) ?></a> · <?= e(date('j M Y', strtotime($post['created_at'] . ' UTC'))) ?></p>
             </article>
         <?php endforeach; ?>

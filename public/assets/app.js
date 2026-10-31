@@ -315,6 +315,8 @@ const INSTALL_POPUP_DELAY_MS = 3000;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let installPrompt = null;
 
+const onPhone = () => window.matchMedia('(pointer: coarse) and (max-width: 767px)').matches;
+
 const installWasDismissed = () => {
   try {
     return Date.now() - Number(localStorage.getItem(INSTALL_DISMISSED_KEY)) < INSTALL_ASK_AGAIN_MS;
@@ -355,14 +357,14 @@ const runInstallPrompt = async () => {
 // Only on phones, and not while someone is typing in a chat. Browsers don't offer the prompt once it's installed.
 const offerInstall = () => {
   if (installMenuItem) installMenuItem.hidden = false;
-  const onPhone = window.matchMedia('(pointer: coarse) and (max-width: 767px)').matches;
-  if (onPhone && !installWasDismissed() && !document.querySelector('[data-chat]')) {
+  if (onPhone() && !installWasDismissed() && !document.querySelector('[data-chat]')) {
     setTimeout(openInstallSheet, INSTALL_POPUP_DELAY_MS);
   }
 };
 
 window.addEventListener('beforeinstallprompt', (event) => {
-  event.preventDefault();
+  // Phones get our popup instead of the browser's banner. Computers have no banner, only an icon in the address bar.
+  if (onPhone()) event.preventDefault();
   installPrompt = event;
   if (!isInstalled) offerInstall();
 });
