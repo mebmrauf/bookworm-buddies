@@ -7,6 +7,12 @@ set_exception_handler(function (Throwable $e) {
     echo 'Something went wrong. Please try again.';
 });
 
+// Vercel's proxy ends HTTPS and passes the visitor's address in headers it sets itself, so visitors can't fake them.
+if (getenv('VERCEL')) {
+    $_SERVER['HTTPS'] = ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https' ? 'on' : '';
+    $_SERVER['REMOTE_ADDR'] = $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+}
+header_remove('X-Powered-By');
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'inline-speculation-rules'; img-src 'self' https://res.cloudinary.com blob:; style-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'");
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
@@ -40,9 +46,6 @@ const SEARCH_CANDIDATES = 500;
 const HIGHLIGHT_WINDOW = 500;
 // Below this, one or two 5-star ratings could put a book at the top of Top rated.
 const BOOK_RATINGS_TO_RANK = 5;
-const FULLTEXT_MIN_WORD = 3;
-// MySQL doesn't index these, so requiring one would make every search for it come back empty.
-const FULLTEXT_STOPWORDS = ['about', 'are', 'com', 'for', 'from', 'how', 'that', 'the', 'this', 'was', 'what', 'when', 'where', 'who', 'will', 'with', 'und', 'www'];
 
 // The SQL rule for a book anyone may see: shared by its owner, and the owner isn't suspended.
 const VISIBLE_BOOK = 'c.showcase = 1 AND u.suspended_at IS NULL';
@@ -51,18 +54,6 @@ const BOOK_BUSY = '(EXISTS (SELECT 1 FROM swap s WHERE s.activeBookID = b.bookID
 
 // 0 means a guest. Public pages use this; private ones go through auth.php.
 $userID = (int) ($_SESSION['user_id'] ?? 0);
-
-// Search terms for a FULLTEXT index, matching whole words and word beginnings. Returns '' if no word is long enough to index.
-function fulltext_query($text) {
-    preg_match_all('/[\p{L}\p{N}_]+/u', $text, $matches);
-    $terms = [];
-    foreach (array_slice($matches[0], 0, 8) as $word) {
-        if (mb_strlen($word) >= FULLTEXT_MIN_WORD && !in_array(mb_strtolower($word), FULLTEXT_STOPWORDS, true)) {
-            $terms[] = "+$word*";
-        }
-    }
-    return implode(' ', $terms);
-}
 
 // Starts-with pattern for very short searches. Unlike %text% it can use an index, so it stays fast on large tables.
 function prefix_pattern($text) {

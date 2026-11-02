@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../src/bootstrap.php';
 
-const POLICIES_UPDATED = '1 November 2026';
+const POLICIES_UPDATED = '2 November 2026';
 
 $contact = config('contact_email');
 $contactLink = $contact ? '<a class="link" href="mailto:' . e($contact) . '">' . e($contact) . '</a>' : 'the site owner';
@@ -151,8 +151,8 @@ include __DIR__ . '/../templates/top.php';
 
     <h3>Services that handle it for us</h3>
     <ul>
-        <li><strong>Render</strong> runs the website.</li>
-        <li><strong>Aiven</strong> stores the database.</li>
+        <li><strong>Vercel</strong> runs the website.</li>
+        <li><strong>TiDB Cloud</strong> stores the database.</li>
         <li><strong>Cloudinary</strong> stores and delivers images.</li>
         <li><strong>Resend</strong> sends email.</li>
     </ul>

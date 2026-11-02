@@ -5,23 +5,25 @@ const PER_PAGE = 18;
 const SEARCH_RESULTS = 30;
 
 $q = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
-$terms = fulltext_query($q);
+$searching = $q !== '';
 // Continues from the last post shown, because page numbers get slower as the blog grows.
 $before = max(0, (int) ($_GET['before'] ?? 0));
 
 $columns = 'p.postID, p.title, p.book_title, p.book_author, p.excerpt, p.image_public_id, p.created_at, u.userID, u.username';
 
 // The full text isn't read here, just the saved excerpt.
-if ($terms !== '') {
+if ($searching) {
+    require_once __DIR__ . '/../src/search.php';
+    [$candidates, $types, $params] = search_candidates('posts', 'postID', 'title, book_title, book_author', 'title', $q);
     // A search shows its best batch of matches, so a common word can't mean sorting huge numbers of posts.
     $rows = run("
         SELECT $columns
-        FROM (SELECT postID FROM posts WHERE MATCH (title, book_title, book_author) AGAINST (? IN BOOLEAN MODE) LIMIT " . SEARCH_CANDIDATES . ") m
+        FROM ($candidates) m
         JOIN posts p ON p.postID = m.postID
         JOIN users u ON p.userID = u.userID
         WHERE p.removed_at IS NULL AND u.suspended_at IS NULL
         LIMIT " . SEARCH_RESULTS,
-        's', $terms
+        $types, ...$params
     )->get_result()->fetch_all(MYSQLI_ASSOC);
     usort($rows, fn($a, $b) => $b['postID'] <=> $a['postID']);
     $before = 0;
@@ -37,8 +39,8 @@ if ($terms !== '') {
     ", $before > 0 ? 'ii' : 'i', ...($before > 0 ? [$before, PER_PAGE + 1] : [PER_PAGE + 1]))->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
-$hasMore = $terms === '' && count($rows) > PER_PAGE;
-$posts = $terms === '' ? array_slice($rows, 0, PER_PAGE) : $rows;
+$hasMore = !$searching && count($rows) > PER_PAGE;
+$posts = !$searching ? array_slice($rows, 0, PER_PAGE) : $rows;
 $covers = post_covers($posts);
 $headingTag = 'h2';
 

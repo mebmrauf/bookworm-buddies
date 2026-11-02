@@ -8,7 +8,7 @@ const PER_PAGE = 30;
 $q = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
 $onlySuspended = ($_GET['status'] ?? '') === 'suspended';
 $page = max(1, (int) ($_GET['page'] ?? 1));
-$pattern = like_pattern($q);
+$pattern = like_pattern(mb_strtolower($q));
 $offset = ($page - 1) * PER_PAGE;
 
 // Deliberately no mobile number or address: moderation doesn't need them.
@@ -19,7 +19,7 @@ $users = run("
         (SELECT AVG(stars) FROM ratings WHERE ratedID = u.userID) AS ratingAverage,
         (SELECT COUNT(*) FROM ratings WHERE ratedID = u.userID) AS ratingCount
     FROM users u
-    WHERE (u.username LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)" . ($onlySuspended ? ' AND u.suspended_at IS NOT NULL' : '') . "
+    WHERE (LOWER(u.username) LIKE ? OR LOWER(u.first_name) LIKE ? OR LOWER(u.last_name) LIKE ? OR LOWER(u.email) LIKE ?)" . ($onlySuspended ? ' AND u.suspended_at IS NOT NULL' : '') . "
     ORDER BY u.userID DESC
     LIMIT ? OFFSET ?
 ", 'ssssii', $pattern, $pattern, $pattern, $pattern, PER_PAGE + 1, $offset)->get_result()->fetch_all(MYSQLI_ASSOC);

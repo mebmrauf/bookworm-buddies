@@ -33,7 +33,7 @@ The admin area is at `/admin`, and it doesn't exist until you configure it:
 
 ## Return reminders
 
-Render's free plan has no scheduled jobs, so an outside service calls a secret link once a day:
+An outside service calls a secret link once a day, which works on any host:
 
 1. Set `cron_token` in `config.php` to a long random value, for example from `openssl rand -hex 32`.
 2. At a free scheduler such as cron-job.org, add a daily call to `https://your-site/cron.php?token=YOUR_TOKEN`.

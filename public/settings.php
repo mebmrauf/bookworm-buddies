@@ -9,7 +9,7 @@ $oldAvatar = $user['avatar_public_id'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf('/settings.php');
     $user = [
-        'first_name' => post('first_name'), 'last_name' => post('last_name'), 'username' => post('username'), 'email' => post('email'), 'city' => post('city'), 'area' => post('area'),
+        'first_name' => post('first_name'), 'last_name' => post('last_name'), 'username' => mb_strtolower(post('username')), 'email' => mb_strtolower(post('email')), 'city' => post('city'), 'area' => post('area'),
         'mobile' => post('mobile'), 'address' => post('address'),
     ] + $user;
     $newPassword = post('new_password', false);
