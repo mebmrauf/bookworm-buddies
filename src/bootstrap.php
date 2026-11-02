@@ -4,6 +4,10 @@ ini_set('display_errors', '0');
 set_exception_handler(function (Throwable $e) {
     error_log((string) $e);
     http_response_code(500);
+    if (isset($_GET['debug']) || getenv('DEBUG') === 'true') {
+        echo '<pre>' . htmlspecialchars((string) $e) . '</pre>';
+        return;
+    }
     echo 'Something went wrong. Please try again.';
 });
 
