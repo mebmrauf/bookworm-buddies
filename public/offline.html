@@ -3,44 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Waking up - Bookworm Buddies</title>
+    <title>Offline - Bookworm Buddies</title>
     <style>
         :root { color-scheme: light dark; --paper: #faf7f2; --ink: #221d17; --muted: #655c50; --accent: #a8431a; --on-accent: #fff; }
         @media (prefers-color-scheme: dark) { :root { --paper: #181511; --ink: #f2ece2; --muted: #b5aa9a; --accent: #e08a5f; --on-accent: #1d1209; } }
         body { display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 24px; box-sizing: border-box; background: var(--paper); color: var(--ink); font: 1rem/1.5 system-ui, sans-serif; text-align: center; }
         h1 { margin: 0 0 8px; font: 600 1.6rem Georgia, serif; }
         p { margin: 0 0 20px; color: var(--muted); }
-        a { display: inline-block; min-height: 24px; padding: 10px 20px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 500; text-decoration: none; }
+        a { display: inline-block; min-height: 24px; padding: 10px 20px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 500; text-decoration: none; cursor: pointer; }
     </style>
 </head>
 <body>
     <main>
-        <h1 data-title>Bookworm Buddies is waking up</h1>
-        <p data-text>We run on a free server that sometimes sleeps or restarts. This usually takes less than a minute, and this page will open by itself once it's ready.</p>
+        <h1>You're offline</h1>
+        <p>Please check your internet connection. This page will reload once you are back online.</p>
         <a href="/home.php" data-retry>Try again</a>
     </main>
     <script>
-        // Only a phone with no internet is told to check its connection. Otherwise the server is the problem, not them.
-        const showState = () => {
-            if (navigator.onLine) return;
-            document.querySelector('[data-title]').textContent = "You're offline";
-            document.querySelector('[data-text]').textContent = 'Check your internet connection. This page will open by itself once you are back online.';
-        };
-        showState();
-        window.addEventListener('offline', showState);
+        window.addEventListener('online', () => location.reload());
         document.querySelector('[data-retry]').addEventListener('click', (event) => {
             event.preventDefault();
             location.reload();
         });
-        setInterval(async () => {
-            if (location.pathname === '/offline.html') return;
-            try {
-                const response = await fetch(location.href, { method: 'HEAD', cache: 'no-store' });
-                if (response.ok) location.reload();
-            } catch {
-                // Still not reachable, so keep waiting.
-            }
-        }, 5000);
     </script>
 </body>
 </html>

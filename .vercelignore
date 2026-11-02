@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+aiven_dump.sql
+*.dump.sql
+ca.pem
+database/
+docker/
+Dockerfile
+render.yaml
+tools/
+README.md
+LICENSE
+

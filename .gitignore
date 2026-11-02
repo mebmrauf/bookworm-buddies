@@ -1,7 +1,24 @@
+# Secrets & Environment
 config.php
+.env
+.env.*
+!.env.example
 ca.pem
+*.pem
+*.key
+
+# Database Dumps & Accounts
+*.dump.sql
+aiven_dump.sql
+dump*.sql
+backup*.sql
 demo-accounts.txt
-.DS_Store
+render-db-login.txt
+
+# Platform & IDE Clutter
+.vercel
 .claude/
 .vscode/
-render-db-login.txt
+.idea/
+.DS_Store
+Thumbs.db

@@ -21,10 +21,13 @@ date_default_timezone_set('Asia/Dhaka');
 session_cache_limiter('');
 header('Cache-Control: private, no-cache');
 
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/session.php';
+
+session_set_save_handler(new DatabaseSessionHandler(), true);
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'secure' => !empty($_SERVER['HTTPS'])]);
 session_start();
 
-require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/validation.php';
 require_once __DIR__ . '/cloudinary.php';
 require_once __DIR__ . '/mail.php';

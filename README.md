@@ -40,17 +40,12 @@ Render's free plan has no scheduled jobs, so an outside service calls a secret l
 
 The admin dashboard also has a button to send reminders by hand.
 
-## Deploying to Render
-
-The repo includes a `Dockerfile` and `render.yaml` for Render's free plan.
+## Deploying to Vercel
 
 1. Push this repo to GitHub.
-2. In Render, choose **New > Blueprint** and connect the repo.
-3. Open the new service's **Environment** page and add two **Secret Files**: `config.php` and `ca.pem`. In `config.php`, keep `'ssl_ca' => __DIR__ . '/ca.pem'`.
-4. Deploy, then copy the `onrender.com` address and set it as `app_url` in the `config.php` secret file. Save, and redeploy.
-5. Check that sign-up emails arrive, and that their links open the live site.
-
-If the database won't connect, check that the Aiven service's allowed IP addresses include Render. On the free plan, a site asleep for 15 minutes takes up to a minute to wake.
+2. In Vercel, click **Add New > Project** and import the repo.
+3. In **Environment Variables**, add the keys from your `.env` file (`MYSQL_URL`, `CLOUDINARY_*`, `ADMIN_*`, `APP_URL`, `CRON_TOKEN`, `EMAIL_*`).
+4. Click **Deploy**. Vercel automatically deploys the serverless functions and routes static assets to its Edge CDN.
 
 ## Deploying elsewhere
 

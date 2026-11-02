@@ -52,7 +52,7 @@ window.addEventListener('pageshow', () => {
 const HD_LONG_EDGE = 1280;
 const JPEG_QUALITY = 0.82;
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
-const MAX_SERVER_BYTES = 10 * 1024 * 1024;
+const MAX_SERVER_BYTES = 4 * 1024 * 1024;
 
 const formatSize = (bytes) => (bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
@@ -120,7 +120,7 @@ document.querySelectorAll('[data-upload]').forEach((box) => {
     } catch (error) {
       // Not every browser can do this, so the server's compression takes over.
       if (file.size > MAX_SERVER_BYTES) {
-        fail('That file is too large for this browser to compress. Please choose one under 10 MB.');
+        fail('That file is too large for this browser to compress. Please choose one under 4 MB.');
       } else {
         show(file);
       }

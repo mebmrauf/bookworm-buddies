@@ -7,7 +7,9 @@ function config($key) {
 }
 
 $conn = mysqli_init();
-$conn->ssl_set(null, null, config('ssl_ca'), null, null);
+if (config('ssl_ca')) {
+    $conn->ssl_set(null, null, config('ssl_ca'), null, null);
+}
 $conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, true);
 // Set during the handshake, which saves a round trip per page.
 $conn->options(MYSQLI_SET_CHARSET_NAME, 'utf8mb4');

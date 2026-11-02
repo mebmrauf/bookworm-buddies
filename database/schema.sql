@@ -150,6 +150,14 @@ CREATE TABLE admin_log (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE sessions (
+    id VARCHAR(128) NOT NULL PRIMARY KEY,
+    data MEDIUMTEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    INDEX (expires_at)
+);
+
+
 CREATE TABLE messages (
     messageID INT AUTO_INCREMENT PRIMARY KEY,
     swapID INT NOT NULL,
