@@ -57,7 +57,8 @@ function icon($name) {
 
 function asset($file) {
     // A new version gets a new address, so browsers can keep the old one for a year without going stale.
-    return "/assets/$file?v=" . filemtime(__DIR__ . "/../public/assets/$file");
+    // Vercel's files all share one date, so each deploy's commit names the version there.
+    return "/assets/$file?v=" . (getenv('VERCEL_GIT_COMMIT_SHA') ?: filemtime(__DIR__ . "/../public/assets/$file"));
 }
 
 // A designed placeholder keeps the grid even for books without a photo.

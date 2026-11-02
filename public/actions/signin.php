@@ -10,7 +10,8 @@ const MAX_IP_ATTEMPTS = 60; // Across accounts, against trying one password on m
 // Checked when the account doesn't exist, so response time doesn't reveal which accounts do.
 const DUMMY_HASH = '$2y$12$u.zJmE0XRZZKUMjtV6pOXec2KtoEAt/W8B3LyA9geXmc3gmDIAUHC';
 
-$login = post('login');
+// Emails and usernames are stored in lower case, because the database compares text case-sensitively.
+$login = mb_strtolower(post('login'));
 $password = post('password', false);
 $ip = $_SERVER['REMOTE_ADDR'] ?? '';
 

@@ -22,7 +22,7 @@ function generate_username($firstName, $lastName) {
 }
 
 $name = post('name');
-$email = post('email');
+$email = mb_strtolower(post('email'));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf('/signup.php');

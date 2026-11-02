@@ -8,14 +8,14 @@ const PER_PAGE = 30;
 $q = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
 $onlyRemoved = ($_GET['status'] ?? '') === 'removed';
 $page = max(1, (int) ($_GET['page'] ?? 1));
-$pattern = like_pattern($q);
+$pattern = like_pattern(mb_strtolower($q));
 $offset = ($page - 1) * PER_PAGE;
 
 $books = run("
     SELECT b.bookID, b.title, b.author, b.cover_public_id, b.cover_credit, b.listing_type, b.removed_at, b.removed_reason, c.showcase, u.userID, u.username,
         (SELECT COUNT(*) FROM reports r WHERE r.target_type = 'book' AND r.target_id = b.bookID) AS reportCount
     FROM books b JOIN collection c ON b.bookID = c.bookID JOIN users u ON c.userID = u.userID
-    WHERE (b.title LIKE ? OR b.author LIKE ? OR u.username LIKE ?)" . ($onlyRemoved ? ' AND b.removed_at IS NOT NULL' : '') . "
+    WHERE (LOWER(b.title) LIKE ? OR LOWER(b.author) LIKE ? OR LOWER(u.username) LIKE ?)" . ($onlyRemoved ? ' AND b.removed_at IS NOT NULL' : '') . "
     ORDER BY b.bookID DESC
     LIMIT ? OFFSET ?
 ", 'sssii', $pattern, $pattern, $pattern, PER_PAGE + 1, $offset)->get_result()->fetch_all(MYSQLI_ASSOC);

@@ -7,7 +7,7 @@ $email = $_SESSION['verify_email'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf('/verify-email.php');
-    $email = post('email');
+    $email = mb_strtolower(post('email'));
     $_SESSION['verify_email'] = $email;
 
     if (validate_email($email)) {

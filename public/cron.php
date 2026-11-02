@@ -1,5 +1,5 @@
 <?php
-// Daily reminder link for an outside scheduler, because Render's free plan has no scheduled jobs.
+// Daily reminder link for an outside scheduler, so reminders work on any host.
 require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/reminders.php';
 

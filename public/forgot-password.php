@@ -6,7 +6,7 @@ const MAX_RESETS_PER_ADDRESS = 3;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf('/forgot-password.php');
-    $email = post('email');
+    $email = mb_strtolower(post('email'));
 
     if (validate_email($email)) {
         flash('Please enter a valid email address.', '/forgot-password.php');
