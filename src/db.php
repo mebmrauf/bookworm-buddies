@@ -1,8 +1,12 @@
 <?php
 function config($key) {
     static $config = null;
-    // The test suite points this at its own file to run a server with a known admin login.
-    $config ??= require getenv('BOOKWORM_CONFIG') ?: __DIR__ . '/../config.php';
+    if ($config === null) {
+        $file = getenv('BOOKWORM_CONFIG') ?: (
+            file_exists(__DIR__ . '/../config.php') ? __DIR__ . '/../config.php' : __DIR__ . '/../config.example.php'
+        );
+        $config = require $file;
+    }
     return $config[$key] ?? null;
 }
 
@@ -15,8 +19,9 @@ $conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, true);
 $conn->options(MYSQLI_SET_CHARSET_NAME, 'utf8mb4');
 
 try {
-    // p: reuses an open connection, because a new encrypted one costs about 0.3s on every page.
-    $connected = $conn->real_connect('p:' . config('host'), config('user'), config('password'), config('database'), config('port'), null, MYSQLI_CLIENT_SSL);
+    // Avoid persistent connections on serverless (Vercel) to prevent stale socket errors across lambda freeze/thaw.
+    $hostPrefix = getenv('VERCEL') ? '' : 'p:';
+    $connected = $conn->real_connect($hostPrefix . config('host'), config('user'), config('password'), config('database'), config('port'), null, MYSQLI_CLIENT_SSL);
 } catch (mysqli_sql_exception $e) {
     $connected = false;
     error_log($e->getMessage());
