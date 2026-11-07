@@ -52,7 +52,7 @@ include __DIR__ . '/../templates/top.php';
         <h1>Every book deserves <em>another reader.</em></h1>
         <p class="hero__lead">Borrow from book lovers near you, pass on the stories you've finished, and give every shelf a second life. It's free, and you can look around without an account.</p>
         <div class="actions">
-            <a class="btn btn--primary btn--large" href="/home.php">Browse books</a>
+            <a class="btn btn--primary btn--large" href="/home.php">Browse books<?= icon('arrow') ?></a>
             <a class="btn btn--light btn--large" href="/signup.php">Join free</a>
         </div>
         </div>
@@ -121,7 +121,7 @@ include __DIR__ . '/../templates/top.php';
 <section class="landing__section landing__cta">
     <h2>Got books gathering dust?</h2>
     <p class="muted">Put them on your shelf and let someone else enjoy them.</p>
-    <a class="btn btn--primary btn--large" href="/signup.php">Create a free account</a>
+    <a class="btn btn--primary btn--large" href="/signup.php">Create a free account<?= icon('arrow') ?></a>
     <p class="landing__links"><a class="link" href="/about.php">About</a> &middot; <a class="link" href="/rules.php">Rules and policies</a></p>
 </section>
 <?php include __DIR__ . '/../templates/bottom.php'; ?>

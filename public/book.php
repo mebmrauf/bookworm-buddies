@@ -66,6 +66,7 @@ include __DIR__ . '/../templates/top.php';
 <article class="book-detail">
     <div class="book-detail__cover"><?= book_cover($book, '(min-width: 960px) 300px, (min-width: 640px) 240px, 60vw') ?></div>
     <div class="book-detail__info">
+        <span class="tag tag--<?= e($book['listing_type']) ?>"><?= e(listing_label($book['listing_type'])) ?></span>
         <h1><?= e($book['title']) ?></h1>
         <p class="book-detail__author">by <?= e($book['author']) ?></p>
         <p class="muted">Published <?= e($book['year_published']) ?></p>
