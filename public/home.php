@@ -90,7 +90,7 @@ $url = fn($changes) => '/home.php?' . http_build_query($changes + ['city' => $ci
             <select id="type" name="type">
                 <option value="">Any type</option>
                 <?php foreach (LISTING_TYPES as $value => $label): ?>
-                    <option value="<?= $value ?>"<?= $listing === $value ? ' selected' : '' ?>><?= e(['lend' => 'To borrow', 'give' => 'Free to keep', 'swap' => 'To swap'][$value]) ?></option>
+                    <option value="<?= $value ?>"<?= $listing === $value ? ' selected' : '' ?>><?= e(listing_label($value)) ?></option>
                 <?php endforeach; ?>
             </select>
             <label class="visually-hidden" for="sort">Sort</label>

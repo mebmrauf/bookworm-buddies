@@ -16,6 +16,7 @@ $current = fn($page) => ($navActive ?? '') === $page ? ' aria-current="page"' : 
     <title><?= $pageTitle === 'Bookworm Buddies' ? e($pageTitle) : e($pageTitle) . ' - Bookworm Buddies' ?></title>
     <?php if (isset($pageDescription)): ?><meta name="description" content="<?= e($pageDescription) ?>"><?php endif; ?>
     <link rel="preload" href="/assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preconnect" href="https://res.cloudinary.com">
     <script type="speculationrules">{"prefetch":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/actions/*"}},{"not":{"href_matches":"/verify*"}},{"not":{"href_matches":"/chat*"}}]},"eagerness":"moderate"}]}</script>
     <link rel="stylesheet" href="<?= asset('app.css') ?>">
     <script src="<?= asset('app.js') ?>" defer></script>

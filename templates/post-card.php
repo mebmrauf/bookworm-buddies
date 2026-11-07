@@ -8,9 +8,10 @@ $picture = cloudinary_enabled() ? ($post['image_public_id'] ?? null) ?: ($covers
         <a class="post-card__picture" href="<?= $postURL ?>" tabindex="-1" aria-hidden="true"><img src="<?= e(image_url($picture, 200, 300, 'c_fill,g_auto')) ?>" width="200" height="300" alt="" loading="lazy" decoding="async"></a>
     <?php endif; ?>
     <div class="post-card__body">
+        <p class="post-card__book">On <?= e($post['book_title']) ?></p>
         <<?= $headingTag ?>><a href="<?= $postURL ?>"><?= e($post['title']) ?></a></<?= $headingTag ?>>
-        <p class="muted">On <?= e($post['book_title']) ?> &middot; by <a class="link" href="/profile.php?userID=<?= (int) $post['userID'] ?>"><?= e($post['username']) ?></a> &middot; <?= e(date('j M Y', strtotime($post['created_at']))) ?></p>
+        <p class="muted">By <a class="link" href="/profile.php?userID=<?= (int) $post['userID'] ?>"><?= e($post['username']) ?></a> &middot; <?= e(date('j M Y', strtotime($post['created_at']))) ?></p>
         <p class="post-card__excerpt"><?= e($post['excerpt']) ?></p>
-        <a class="link post-card__more" href="<?= $postURL ?>" aria-label="Read the full post: <?= e($post['title']) ?>">Read the full post</a>
+        <a class="post-card__more" href="<?= $postURL ?>" aria-label="Read the full post: <?= e($post['title']) ?>">Read the full post<?= icon('arrow') ?></a>
     </div>
 </article>
